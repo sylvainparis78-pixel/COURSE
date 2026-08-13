@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>La Course des Mascottes</title>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <style>
+    :root {
+      --primary: #2E6CA4;
+      --accent: #ff9800;
+      --dark: #1e1e24;
+      --light: #f4f5f7;
+      --gray: #e0e0e0;
+      --white: #ffffff;
+      --success: #28a745;
+      --danger: #dc3545;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--light); color: var(--dark); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 10px; }
+
+    .app-container {
+      width: 100%;
+      background-color: var(--white);
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      padding: 16px;
+      position: relative;
+    }
+
+    @media (max-width: 768px) {
+      .app-container { max-width: 480px; padding: 12px; }
+    }
+
+    @media (min-width: 769px) {
+      .app-container.desktop-mode {
+        width: 95vw;
+        max-width: 1400px;
+        aspect-ratio: 16 / 9;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+    }
+
+    .header-logos {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--gray);
+    }
+    .header-logo-img {
+      height: 40px;
+      max-width: 140px;
+      object-fit: contain;
+    }
+
+    h1 { font-size: 1.3rem; color: var(--primary); text-align: center; }
+    h2 { font-size: 1rem; color: var(--dark); margin-bottom: 8px; }
+
+    .card { background-color: #f9fbfd; border: 1px solid var(--gray); border-left: 4px solid var(--primary); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+    .form-group { margin-bottom: 10px; }
+    label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; }
+    input[type="text"], input[type="file"] { width: 100%; padding: 10px; border: 1px solid var(--gray); border-radius: 8px; font-size: 0.95rem; outline: none; background: white; }
+
+    .btn { width: 100%; padding: 14px; background-color: var(--primary); color: var(--white); border: none; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-bottom: 8px; }
+    .btn:hover { opacity: 0.9; }
+    .btn-secondary { background-color: #6c757d; }
+    .btn-warning { background-color: var(--accent); color: #000; }
+
+    .avatar-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 8px; }
+    .avatar-card { border: 2px solid var(--gray); border-radius: 12px; padding: 8px; text-align: center; cursor: pointer; transition: all 0.2s; background: white; position: relative; }
+    .avatar-card img { width: 100%; max-width: 70px; height: 70px; object-fit: contain; }
+    .avatar-card.selected { border-color: var(--primary); background-color: #e3f2fd; transform: scale(1.03); }
+    .avatar-card.disabled { opacity: 0.35; cursor: not-allowed; filter: grayscale(100%); }
+    .avatar-card .taken-tag { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(220, 53, 69, 0.9); color: white; font-size: 0.7rem; font-weight: bold; padding: 2px 6px; border-radius: 4px; }
+
+    .race-dashboard {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 16px;
+      flex-grow: 1;
+      height: calc(100% - 50px);
+    }
+
+    .animator-question-panel {
+      background: #ffffff;
+      border: 1px solid #d0e1f0;
+      border-radius: 8px;
+      padding: 10px;
+      margin: 10px 0;
+    }
+    .animator-question-text {
+      font-weight: bold;
+      font-size: 0.9rem;
+      margin-bottom: 8px;
+      color: var(--dark);
+    }
+    .animator-options-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .animator-option-item {
+      font-size: 0.8rem;
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: #f0f4f8;
+      border: 1px solid #d0d7de;
+      transition: all 0.3s ease;
+    }
+    .animator-option-item.correct-answer {
+      background: var(--success) !important;
+      color: #ffffff !important;
+      font-weight: bold;
+      border-color: var(--success) !important;
+    }
+
+    .race-track-v2 {
+      background: linear-gradient(180deg, #6c727c 0%, #4a4d52 100%);
+      border: 3px solid #8e95a0;
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-evenly;
+      position: relative;
+      overflow: hidden;
+      box-shadow: inset 0 0 15px rgba(0,0,0,0.3);
+      height: 100%;
+    }
+
+    .lane-v2 {
+      position: relative;
+      height: calc(100% / 6 - 10px);
+      min-height: 48px;
+      background: rgba(255, 255, 255, 0.18);
+      border-radius: 27px;
+      border: 1px dashed rgba(255, 255, 255, 0.4);
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+    }
+
+    .lane-v2 .player-tag {
+      position: absolute;
+      left: 12px;
+      z-index: 2;
+      color: #fff;
+      font-size: 0.85rem;
+      font-weight: bold;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+      background: rgba(0,0,0,0.6);
+      padding: 3px 10px;
+      border-radius: 10px;
+    }
+
+    .lane-v2 .finish-line {
+      position: absolute;
+      right: 15px;
+      top: 0;
+      bottom: 0;
+      width: 16px;
+      background: repeating-linear-gradient(0deg, #fff, #fff 8px, #000 8px, #000 16px);
+      border-radius: 2px;
+      z-index: 1;
+    }
+
+    .runner-avatar {
+      position: absolute;
+      left: 10px;
+      height: 80%;
+      max-height: 50px;
+      width: auto;
+      object-fit: contain;
+      transition: left 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 3;
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4));
+    }
+
+    .fastest-rocket {
+      position: absolute;
+      font-size: 1.4rem;
+      z-index: 4;
+      transition: all 0.5s ease;
+      animation: boost 0.8s infinite alternate ease-in-out;
+      filter: drop-shadow(0 0 6px rgba(255, 152, 0, 0.8));
+    }
+
+    @keyframes boost {
+      from { transform: translateY(-2px) scale(1); }
+      to { transform: translateY(2px) scale(1.15); }
+    }
+
+    .score-badge {
+      position: absolute;
+      right: 40px;
+      color: #ffd54f;
+      font-weight: bold;
+      font-size: 0.95rem;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    }
+
+    .player-profile-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #e3f2fd;
+      border: 1px solid #bbe2f7;
+      padding: 8px 12px;
+      border-radius: 10px;
+      margin-bottom: 12px;
+    }
+
+    .player-profile-avatar {
+      width: 42px;
+      height: 42px;
+      object-fit: contain;
+    }
+
+    .player-profile-name {
+      font-weight: bold;
+      font-size: 1.05rem;
+      color: var(--primary);
+    }
+
+    .question-box-mobile {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .answers-grid-mobile {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .btn-answer-mobile {
+      background-color: #f0f4f8;
+      color: var(--dark);
+      border: 2px solid var(--gray);
+      padding: 16px;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s;
+    }
+
+    .btn-answer-mobile:active { transform: scale(0.98); }
+    .btn-answer-mobile.correct { background-color: var(--success) !important; color: white; border-color: var(--success); }
+    .btn-answer-mobile.wrong { background-color: var(--danger) !important; color: white; border-color: var(--danger); }
+
+    .player-badge { display: inline-block; background: #e3f2fd; color: var(--primary); font-size: 0.8rem; font-weight: bold; padding: 4px 8px; border-radius: 6px; margin: 2px; }
+
+    .screen { display: none; }
+    .screen.active { display: block; }
+  </style>
+</head>
+<body>
+
+<div class="app-container" id="main-container">
+
+  <div class="header-logos">
+    <img src="logo.png" alt="Logo Equans" class="header-logo-img" onerror="this.style.display='none'">
+    <h1 style="margin:0; font-size:1.1rem; flex-grow:1; text-align:center;">🏁 Course des Mascottes</h1>
+    <img src="logo-sylp.jpg" alt="Logo SYLP" class="header-logo-img" onerror="this.style.display='none'">
+  </div>
+
+  <div id="screen-welcome" class="screen active">
+    <h1>Rejoindre la Partie</h1>
+
+    <div class="card">
+      <div class="form-group">
+        <label for="input-session-code">Code de Partie :</label>
+        <input type="text" id="input-session-code" placeholder="Ex: RACE1" style="text-transform:uppercase;">
+      </div>
+      <button class="btn" onclick="checkAndLoadAvatars()">JOUER</button>
+    </div>
+
+    <div class="card" id="avatar-section" style="display:none;">
+      <h2>Choisissez votre Mascot</h2>
+      <div class="form-group">
+        <label for="input-player-name">Votre Pseudo / Équipe :</label>
+        <input type="text" id="input-player-name" placeholder="Ex: Les Éclairs">
+      </div>
+
+      <div class="avatar-grid" id="avatar-selector"></div>
+      <button class="btn" style="margin-top:14px;" onclick="joinGame()">Entrer dans la Course ➔</button>
+    </div>
+
+    <div class="card" style="border-left-color: var(--dark); margin-top:20px;">
+      <h2>Animateur (Écran 16/9)</h2>
+      <div class="form-group" style="margin-top:8px;">
+        <label for="json-file-input">Charger le fichier questions.json :</label>
+        <input type="file" id="json-file-input" accept=".json">
+      </div>
+      <button class="btn btn-warning" onclick="createGameAsAnimator()">Initialiser la Session</button>
+    </div>
+  </div>
+
+
+  <div id="screen-animator" class="screen" style="height: 100%;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <span id="animator-session-id" style="font-weight:bold; color:var(--primary); font-size:1.1rem;">CODE: ----</span>
+      <span id="animator-q-count" style="font-weight:bold; font-size:1.1rem;">Question : Attente</span>
+    </div>
+
+    <div class="race-dashboard">
+      <div class="card" style="background:#f0f4f8; border-color:#d0e1f0; display:flex; flex-direction:column; justify-content:space-between; margin-bottom:0; overflow-y:auto;">
+        <div>
+          <h2>Console Animateur</h2>
+          <div style="margin: 8px 0; font-size:0.85rem;">
+            <strong>Joueurs (<span id="count-connected">0</span>/6) :</strong>
+            <div id="connected-players-list" style="margin-top:4px;">En attente...</div>
+          </div>
+
+          <div id="animator-q-box" class="animator-question-panel" style="display:none;">
+            <div id="animator-q-title" class="animator-question-text"></div>
+            <ul id="animator-options-list" class="animator-options-list"></ul>
+          </div>
+
+          <div id="answers-tracker" style="margin:8px 0; font-size:0.9rem; font-weight:bold; color:var(--primary);"></div>
+        </div>
+
+        <div>
+          <button id="btn-start-game" class="btn btn-warning" onclick="startFirstQuestion()">🚀 Lancer la 1ère Question</button>
+          <button id="btn-next-q" class="btn btn-secondary" onclick="forceNextQuestion()" style="display:none;">Question Suivante ➔</button>
+        </div>
+      </div>
+
+      <div class="race-track-v2" id="race-track-v2">
+        <div style="color:#eee; text-align:center; margin:auto;">En attente de connexion des mascottes...</div>
+      </div>
+    </div>
+  </div>
+
+
+  <div id="screen-player" class="screen">
+    <div class="player-profile-header">
+      <img id="player-card-avatar" src="" class="player-profile-avatar" alt="Avatar">
+      <div>
+        <div style="font-size:0.75rem; color:#666;">Équipe :</div>
+        <div id="player-card-name" class="player-profile-name">-</div>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <span id="player-session-id" style="font-weight:bold; color:var(--primary);">CODE: ----</span>
+      <span id="player-q-count" style="font-weight:bold;">En attente...</span>
+    </div>
+
+    <div id="player-wait-screen" class="card" style="text-align:center; padding:35px 15px;">
+      <h2>🚦 Préparez-vous !</h2>
+      <p style="margin-top:8px; color:#666;">La partie va bientôt commencer sur l'écran principal.</p>
+    </div>
+
+    <div id="player-question-zone" class="question-box-mobile" style="display:none;">
+      <div class="card" style="margin-bottom:0;">
+        <h2 id="q-title" style="color:var(--primary);">Question 1</h2>
+        <p id="q-text" style="font-size:1.05rem; margin-top:6px; font-weight:600;"></p>
+      </div>
+
+      <div class="answers-grid-mobile" id="answers-container"></div>
+      <div id="feedback-msg" style="margin-top:10px; font-weight:bold; text-align:center; font-size:1.05rem;"></div>
+    </div>
+  </div>
+
+
+  <div id="screen-end" class="screen" style="text-align:center;">
+    <h1>🏆 Arrivée de la Course !</h1>
+
+    <div class="card" style="padding:30px 20px; margin-top:20px;">
+      <div id="winner-banner"></div>
+    </div>
+
+    <button class="btn" style="margin-top:15px;" onclick="location.reload()">Retour au Menu</button>
+  </div>
+
+</div>
+
+<script>
+  // CONFIGURATION FIREBASE
+  const firebaseConfig = {
+    apiKey: "AIzaSyCAz1_Ko1zNmW40sbtaOjnGpGh-P_7aBKw",
+    authDomain: "dilemme-du-prisonnier.firebaseapp.com",
+    databaseURL: "https://dilemme-du-prisonnier-default-rtdb.firebaseio.com",
+    projectId: "dilemme-du-prisonnier",
+    storageBucket: "dilemme-du-prisonnier.firebasestorage.app",
+    messagingSenderId: "953296223832",
+    appId: "1:953296223832:web:1600d4d7210dba6184942d"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  const AVATARS = [
+    { id: 'grenouille', name: 'Grenouille', img: 'grenouille.png' },
+    { id: 'monstre',    name: 'Monstre',    img: 'monstre.png' },
+    { id: 'oiseau',     name: 'Oiseau',     img: 'oiseau.png' },
+    { id: 'renard',     name: 'Renard',     img: 'renard.png' },
+    { id: 'robot',      name: 'Robot',      img: 'robot.png' },
+    { id: 'tortue',     name: 'Tortue',     img: 'tortue.png' }
+  ];
+
+  let QUESTIONS = [];
+  let currentSessionId = "";
+  let playerId = "player_" + Math.random().toString(36).substring(2, 7);
+  let selectedAvatarId = null;
+  let isAnimator = false;
+  let sessionData = {};
+  let hasAnsweredCurrentQuestion = false;
+
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  // CHARGEMENT DU FICHIER JSON (SOIT PAR SELECTION, SOIT PAR FETCH)
+  async function loadQuestionsData() {
+    const fileInput = document.getElementById('json-file-input');
+    
+    // 1. Si un fichier a été sélectionné manuellement via le bouton
+    if (fileInput.files && fileInput.files[0]) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const data = JSON.parse(e.target.result);
+            resolve(data);
+          } catch (err) {
+            reject("Erreur de format JSON dans le fichier fourni.");
+          }
+        };
+        reader.onerror = () => reject("Erreur de lecture du fichier.");
+        reader.readAsText(fileInput.files[0]);
+      });
+    }
+
+    // 2. Sinon, tente de charger questions.json à la racine
+    try {
+      const response = await fetch('questions.json?t=' + Date.now());
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (e) {
+      console.warn("Impossible d'effectuer un fetch automatique.", e);
+    }
+
+    return null;
+  }
+
+  // 1. CRÉATION ANIMATEUR
+  async function createGameAsAnimator() {
+    const inputCode = document.getElementById('input-session-code').value.trim().toUpperCase();
+    currentSessionId = inputCode || Math.random().toString(36).substring(2, 6).toUpperCase();
+    isAnimator = true;
+
+    try {
+      QUESTIONS = await loadQuestionsData();
+    } catch (err) {
+      alert(err);
+      return;
+    }
+
+    if (!QUESTIONS || !Array.isArray(QUESTIONS) || QUESTIONS.length === 0) {
+      alert("Erreur : Aucun fichier questions.json trouvé ! Veuillez sélectionner le fichier avec le bouton prévu à cet effet.");
+      return;
+    }
+
+    document.getElementById('main-container').classList.add('desktop-mode');
+
+    db.ref(`courses/${currentSessionId}`).set({
+      status: 'waiting',
+      currentQuestion: -1,
+      firstCorrectPlayer: null,
+      joueurs: {},
+      answersCount: 0,
+      questions: QUESTIONS
+    }).then(() => {
+      listenToCourse();
+      showScreen('screen-animator');
+    }).catch(err => {
+      alert("Erreur d'initialisation : " + err.message);
+    });
+  }
+
+  // 2. CHECK & AVATARS
+  function checkAndLoadAvatars() {
+    const code = document.getElementById('input-session-code').value.trim().toUpperCase();
+    if (!code) { alert("Veuillez saisir un code de partie."); return; }
+
+    currentSessionId = code;
+    db.ref(`courses/${code}`).once('value').then(snapshot => {
+      const data = snapshot.val();
+      if (!data) {
+        alert("Session introuvable.");
+        return;
+      }
+      document.getElementById('avatar-section').style.display = 'block';
+      
+      db.ref(`courses/${code}/joueurs`).on('value', snapJoueurs => {
+        renderAvatarSelector(snapJoueurs.val() || {});
+      });
+    }).catch(err => {
+      alert("Erreur de connexion : " + err.message);
+    });
+  }
+
+  function renderAvatarSelector(joueurs) {
+    const takenAvatars = Object.values(joueurs).map(j => j.avatar);
+    const container = document.getElementById('avatar-selector');
+    container.innerHTML = '';
+
+    AVATARS.forEach(av => {
+      const isTaken = takenAvatars.includes(av.id) && (selectedAvatarId !== av.id);
+      const isSelected = selectedAvatarId === av.id;
+
+      const card = document.createElement('div');
+      card.className = `avatar-card ${isSelected ? 'selected' : ''} ${isTaken ? 'disabled' : ''}`;
+      card.innerHTML = `
+        <img src="${av.img}" alt="${av.name}" onerror="this.src='https://via.placeholder.com/70?text=${av.name}'">
+        <div style="font-size:0.75rem; font-weight:bold;">${av.name}</div>
+        ${isTaken ? '<div class="taken-tag">Occupé</div>' : ''}
+      `;
+
+      if (!isTaken) {
+        card.onclick = () => {
+          selectedAvatarId = av.id;
+          renderAvatarSelector(joueurs);
+        };
+      }
+      container.appendChild(card);
+    });
+  }
+
+  // 3. REJOINDRE
+  function joinGame() {
+    const name = document.getElementById('input-player-name').value.trim();
+    if (!name) { alert("Saisissez votre nom ou votre équipe."); return; }
+    if (!selectedAvatarId) { alert("Sélectionnez un avatar."); return; }
+
+    const avatarInfo = AVATARS.find(a => a.id === selectedAvatarId);
+    document.getElementById('player-card-name').innerText = name;
+    document.getElementById('player-card-avatar').src = avatarInfo.img;
+
+    db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).set({
+      name: name,
+      avatar: selectedAvatarId,
+      position: 0
+    }).then(() => {
+      listenToCourse();
+      showScreen('screen-player');
+    }).catch(err => {
+      alert("Impossible de rejoindre : " + err.message);
+    });
+  }
+
+  // 4. ÉCOUTE TEMPS RÉEL
+  function listenToCourse() {
+    if (isAnimator) document.getElementById('animator-session-id').innerText = "CODE: " + currentSessionId;
+    else document.getElementById('player-session-id').innerText = "CODE: " + currentSessionId;
+
+    db.ref(`courses/${currentSessionId}`).on('value', snapshot => {
+      sessionData = snapshot.val() || {};
+      const joueurs = sessionData.joueurs || {};
+
+      if (sessionData.questions && Array.isArray(sessionData.questions)) {
+        QUESTIONS = sessionData.questions;
+      }
+
+      if (isAnimator) {
+        updateAnimatorUI(joueurs);
+      } else {
+        updatePlayerUI();
+      }
+
+      if (sessionData.status === 'finished') {
+        showEndScreen(joueurs);
+      }
+    });
+  }
+
+  // 5. CONSOLE ANIMATEUR
+  function updateAnimatorUI(joueurs) {
+    const listEl = document.getElementById('connected-players-list');
+    const joueursArr = Object.values(joueurs);
+
+    document.getElementById('count-connected').innerText = joueursArr.length;
+    listEl.innerHTML = joueursArr.map(j => `<span class="player-badge">${j.name}</span>`).join('') || 'Aucun participant';
+
+    updateRaceTrackV2(joueurs, sessionData.firstCorrectPlayer);
+
+    const qIndex = sessionData.currentQuestion;
+    if (qIndex >= 0 && qIndex < QUESTIONS.length) {
+      document.getElementById('animator-q-count').innerText = `Question ${qIndex + 1} / ${QUESTIONS.length}`;
+      document.getElementById('btn-start-game').style.display = 'none';
+      document.getElementById('btn-next-q').style.display = 'block';
+
+      const totalConnected = joueursArr.length;
+      const totalAnswers = sessionData.answersCount || 0;
+      document.getElementById('answers-tracker').innerText = `Réponses : ${totalAnswers} / ${totalConnected}`;
+
+      const qBox = document.getElementById('animator-q-box');
+      qBox.style.display = 'block';
+
+      const currentQ = QUESTIONS[qIndex];
+      document.getElementById('animator-q-title').innerText = `${qIndex + 1}. ${currentQ.text}`;
+
+      const optionsList = document.getElementById('animator-options-list');
+      optionsList.innerHTML = '';
+
+      const allHaveAnswered = (totalConnected > 0 && totalAnswers >= totalConnected);
+
+      currentQ.options.forEach((opt, idx) => {
+        const li = document.createElement('li');
+        li.className = 'animator-option-item';
+
+        if (allHaveAnswered && idx === currentQ.correct) {
+          li.classList.add('correct-answer');
+          li.innerText = `✓ ${opt} (Bonne réponse)`;
+        } else {
+          li.innerText = opt;
+        }
+
+        optionsList.appendChild(li);
+      });
+
+      if (allHaveAnswered && !sessionData.autoSwitching) {
+        db.ref(`courses/${currentSessionId}`).update({ autoSwitching: true });
+        setTimeout(() => { forceNextQuestion(); }, 2000);
+      }
+    } else {
+      document.getElementById('animator-q-box').style.display = 'none';
+    }
+  }
+
+  function startFirstQuestion() {
+    db.ref(`courses/${currentSessionId}`).update({
+      status: 'active',
+      currentQuestion: 0,
+      firstCorrectPlayer: null,
+      answersCount: 0,
+      autoSwitching: false
+    });
+  }
+
+  function forceNextQuestion() {
+    const nextQ = (sessionData.currentQuestion || 0) + 1;
+    if (nextQ >= QUESTIONS.length) {
+      db.ref(`courses/${currentSessionId}`).update({ status: 'finished' });
+    } else {
+      db.ref(`courses/${currentSessionId}`).update({
+        currentQuestion: nextQ,
+        firstCorrectPlayer: null,
+        answersCount: 0,
+        autoSwitching: false
+      });
+    }
+  }
+
+  function updateRaceTrackV2(joueursObj, firstCorrectKey) {
+    const trackContainer = document.getElementById('race-track-v2');
+    trackContainer.innerHTML = '';
+
+    const entries = Object.entries(joueursObj);
+    if (entries.length === 0) {
+      trackContainer.innerHTML = `<div style="color:#eee; text-align:center; margin:auto;">En attente de connexion des mascottes...</div>`;
+      return;
+    }
+
+    const MAX_THEORETICAL_POINTS = Math.max(QUESTIONS.length * 2, 10);
+
+    entries.forEach(([pKey, jData]) => {
+      const avatarInfo = AVATARS.find(a => a.id === jData.avatar) || AVATARS[0];
+      const lane = document.createElement('div');
+      lane.className = 'lane-v2';
+
+      const progressPct = Math.min((jData.position / MAX_THEORETICAL_POINTS) * 82 + 2, 85);
+
+      const isFastest = (firstCorrectKey === pKey);
+      const rocketHtml = isFastest ? `<span class="fastest-rocket" style="left: calc(${progressPct}% + 45px);">🚀</span>` : '';
+
+      lane.innerHTML = `
+        <span class="player-tag">${jData.name}</span>
+        <img src="${avatarInfo.img}" class="runner-avatar" style="left: ${progressPct}%;" onerror="this.src='https://via.placeholder.com/44?text=X'">
+        ${rocketHtml}
+        <span class="score-badge">${jData.position} pts</span>
+        <div class="finish-line"></div>
+      `;
+
+      trackContainer.appendChild(lane);
+    });
+  }
+
+  // 6. INTERFACE MOBILES
+  function updatePlayerUI() {
+    const qIndex = sessionData.currentQuestion;
+
+    if (qIndex === undefined || qIndex < 0 || !QUESTIONS || QUESTIONS.length === 0 || qIndex >= QUESTIONS.length) {
+      document.getElementById('player-wait-screen').style.display = 'block';
+      document.getElementById('player-question-zone').style.display = 'none';
+      return;
+    }
+
+    document.getElementById('player-wait-screen').style.display = 'none';
+    document.getElementById('player-question-zone').style.display = 'flex';
+
+    const q = QUESTIONS[qIndex];
+    document.getElementById('player-q-count').innerText = `Question ${qIndex + 1} / ${QUESTIONS.length}`;
+    document.getElementById('q-title').innerText = `Question ${qIndex + 1}`;
+    document.getElementById('q-text').innerText = q.text;
+
+    const container = document.getElementById('answers-container');
+
+    if (container.dataset.qIndex != qIndex) {
+      hasAnsweredCurrentQuestion = false;
+      container.dataset.qIndex = qIndex;
+      document.getElementById('feedback-msg').innerText = '';
+      container.innerHTML = '';
+
+      q.options.forEach((opt, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'btn-answer-mobile';
+        btn.innerText = opt;
+        btn.onclick = () => submitAnswer(idx, q.correct);
+        container.appendChild(btn);
+      });
+    }
+  }
+
+  function submitAnswer(chosenIdx, correctIdx) {
+    if (hasAnsweredCurrentQuestion) return;
+    hasAnsweredCurrentQuestion = true;
+
+    const buttons = document.querySelectorAll('.btn-answer-mobile');
+    buttons.forEach(b => b.disabled = true);
+
+    const isCorrect = (chosenIdx === correctIdx);
+    buttons[chosenIdx].classList.add(isCorrect ? 'correct' : 'wrong');
+    if (!isCorrect) buttons[correctIdx].classList.add('correct');
+
+    const feedbackEl = document.getElementById('feedback-msg');
+
+    db.ref(`courses/${currentSessionId}/answersCount`).transaction(count => (count || 0) + 1);
+
+    if (isCorrect) {
+      const isFirst = !sessionData.firstCorrectPlayer;
+      const moveSteps = isFirst ? 2 : 1;
+
+      if (isFirst) {
+        db.ref(`courses/${currentSessionId}/firstCorrectPlayer`).set(playerId);
+        feedbackEl.innerHTML = `🚀 <span style="color:var(--success);">Bonne réponse ! (+2 pts le plus rapide)</span>`;
+      } else {
+        feedbackEl.innerHTML = `✅ <span style="color:var(--success);">Bonne réponse ! (+1 pt)</span>`;
+      }
+
+      const currentPos = (sessionData.joueurs[playerId] && sessionData.joueurs[playerId].position) || 0;
+      db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({
+        position: currentPos + moveSteps
+      });
+    } else {
+      feedbackEl.innerHTML = `❌ <span style="color:var(--danger);">Mauvaise réponse.</span> (+0 pt)`;
+    }
+  }
+
+// 7. ÉCRAN FIN (Gestion des égalités)
+  function showEndScreen(joueursObj) {
+    showScreen('screen-end');
+    const joueursArr = Object.values(joueursObj);
+    if (joueursArr.length === 0) return;
+
+    // 1. Trouver le score maximum
+    const maxScore = Math.max(...joueursArr.map(j => j.position));
+
+    // 2. Récupérer tous les joueurs qui ont ce score max
+    const winners = joueursArr.filter(j => j.position === maxScore);
+
+    const bannerContainer = document.getElementById('winner-banner');
+
+    if (winners.length === 1) {
+      // Cas : Un seul vainqueur
+      const winner = winners[0];
+      const winnerAvatar = AVATARS.find(a => a.id === winner.avatar) || {};
+
+      bannerContainer.innerHTML = `
+        <img src="${winnerAvatar.img}" style="width:120px; height:120px; object-fit:contain; margin-bottom:12px;" onerror="this.style.display='none'">
+        <h2 style="color:var(--success); font-size:1.6rem;">🎉 Félicitations à ${winner.name} ! 🎉</h2>
+        <p style="font-size:1.1rem; margin-top:8px;">Grand Vainqueur de la course avec <strong>${winner.position} points</strong> !</p>
+      `;
+    } else {
+      // Cas : Égalité (plusieurs vainqueurs)
+      const winnersNames = winners.map(w => w.name).join(', ');
+      
+      // Génération des avatars côte à côte
+      let avatarsHtml = '<div style="display:flex; justify-content:center; gap:15px; flex-wrap:wrap; margin-bottom:15px;">';
+      winners.forEach(w => {
+        const av = AVATARS.find(a => a.id === w.avatar) || {};
+        avatarsHtml += `
+          <div style="text-align:center;">
+            <img src="${av.img}" style="width:80px; height:80px; object-fit:contain;" onerror="this.style.display='none'">
+            <div style="font-size:0.85rem; font-weight:bold; margin-top:4px;">${w.name}</div>
+          </div>
+        `;
+      });
+      avatarsHtml += '</div>';
+
+      bannerContainer.innerHTML = `
+        ${avatarsHtml}
+        <h2 style="color:var(--success); font-size:1.6rem;">🤝 Égalité parfaite ! 🤝</h2>
+        <h3 style="color:var(--primary); font-size:1.2rem; margin-top:8px;">Félicitations aux vainqueurs : <strong>${winnersNames}</strong> !</h3>
+        <p style="font-size:1.1rem; margin-top:8px;">Ils terminent ex æquo en tête avec <strong>${maxScore} points</strong> chacun !</p>
+      `;
+    }
+  }  
+
+</script>
+
+</body>
+</html>
