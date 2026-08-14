@@ -124,7 +124,7 @@
       border-color: var(--success) !important;
     }
 
-    /* --- PISTE DE COURSE SANS IMAGE DE FOND --- */
+    /* --- PISTE DE COURSE --- */
     .race-track-v2 {
       background: #1e293b;
       border: 3px solid #0f172a;
@@ -139,7 +139,6 @@
       height: 100%;
     }
 
-    /* COULOIRS EN COULEURS PASTEL DISTINCTES */
     .lane-v2 {
       position: relative;
       height: calc(100% / 6 - 8px);
@@ -152,13 +151,12 @@
       transition: background-color 0.3s ease;
     }
 
-    /* Définition des 6 couleurs pastel */
-    .lane-v2.lane-color-0 { background-color: #B2FBA5; border: 2px solid #8BEA7A; } /* Vert pastel */
-    .lane-v2.lane-color-1 { background-color: #FFC3A0; border: 2px solid #FFA07A; } /* Pêche pastel */
-    .lane-v2.lane-color-2 { background-color: #A2E8DD; border: 2px solid #72D6C7; } /* Vert d'eau pastel */
-    .lane-v2.lane-color-3 { background-color: #FFDFBA; border: 2px solid #FBC280; } /* Jaune/Orange pastel */
-    .lane-v2.lane-color-4 { background-color: #D4A5FF; border: 2px solid #BB80FF; } /* Violet pastel */
-    .lane-v2.lane-color-5 { background-color: #BAE1FF; border: 2px solid #84C5FF; } /* Bleu pastel */
+    .lane-v2.lane-color-0 { background-color: #B2FBA5; border: 2px solid #8BEA7A; }
+    .lane-v2.lane-color-1 { background-color: #FFC3A0; border: 2px solid #FFA07A; }
+    .lane-v2.lane-color-2 { background-color: #A2E8DD; border: 2px solid #72D6C7; }
+    .lane-v2.lane-color-3 { background-color: #FFDFBA; border: 2px solid #FBC280; }
+    .lane-v2.lane-color-4 { background-color: #D4A5FF; border: 2px solid #BB80FF; }
+    .lane-v2.lane-color-5 { background-color: #BAE1FF; border: 2px solid #84C5FF; }
 
     .lane-v2 .player-tag {
       position: absolute;
@@ -203,7 +201,6 @@
       to   { transform: translateY(-3px) rotate(1deg); }
     }
 
-    /* --- EFFET 1 : HALO LUMINEUX (JOUEUR EN TÊTE) --- */
     .leader-halo {
       filter: drop-shadow(0 0 12px #FFD700) drop-shadow(0 0 20px #FF8C00) !important;
       animation: leaderGlow 0.8s infinite alternate ease-in-out !important;
@@ -214,7 +211,6 @@
       to   { transform: translateY(-4px) scale(1.08); filter: drop-shadow(0 0 16px #FFF700) drop-shadow(0 0 25px #FF4500); }
     }
 
-    /* --- EFFET 2 : FUMÉE / BOOST (PREMIER À RÉPONDRE) --- */
     .smoke-container {
       position: absolute;
       z-index: 2;
@@ -323,10 +319,31 @@
 
     .player-badge { display: inline-block; background: #e3f2fd; color: var(--primary); font-size: 0.8rem; font-weight: bold; padding: 4px 8px; border-radius: 6px; margin: 2px; }
 
+    /* STYLES CLASSEMENT ANIMATEUR */
+    .leaderboard-list {
+      margin-top: 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      text-align: left;
+    }
+    .leaderboard-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: white;
+      border-radius: 10px;
+      border: 1px solid var(--gray);
+      font-weight: bold;
+    }
+    .leaderboard-item.top-1 { border-color: #FFD700; background: #FFFDF0; }
+    .leaderboard-item.top-2 { border-color: #C0C0C0; background: #F8F9FA; }
+    .leaderboard-item.top-3 { border-color: #CD7F32; background: #FFF8F0; }
+
     .screen { display: none; }
     .screen.active { display: block; }
 
-    /* --- EFFET 3 : CONFETTIS DE VICTOIRE --- */
     .confetti {
       position: fixed;
       width: 10px;
@@ -457,9 +474,18 @@
 
     <div class="card" style="padding:30px 20px; margin-top:20px;">
       <div id="winner-banner"></div>
+      
+      <button id="btn-show-leaderboard" class="btn btn-warning" style="display:none; max-width:300px; margin:20px auto 0 auto;" onclick="toggleLeaderboard()">
+        📊 Afficher le Classement
+      </button>
+
+      <div id="leaderboard-panel" style="display:none; margin-top:20px;">
+        <h3 style="color:var(--primary); margin-bottom:10px;">Classement Général</h3>
+        <div id="leaderboard-list" class="leaderboard-list"></div>
+      </div>
     </div>
 
-    <button class="btn" style="margin-top:15px;" onclick="leaveSession()">Retour au Menu</button>
+    <button class="btn" style="margin-top:15px; max-width:300px;" onclick="leaveSession()">Retour au Menu</button>
   </div>
 
 </div>
@@ -775,7 +801,7 @@
     }
   }
 
-  // AFFICHAGE DE LA PISTE AVEC COULOIRS PASTELS ET EFFETS
+  // AFFICHAGE DE LA PISTE
   function updateRaceTrackV2(joueursObj, firstCorrectKey) {
     const trackContainer = document.getElementById('race-track-v2');
     trackContainer.innerHTML = '';
@@ -792,8 +818,6 @@
     entries.forEach(([pKey, jData], index) => {
       const avatarInfo = AVATARS.find(a => a.id === jData.avatar) || AVATARS[0];
       const lane = document.createElement('div');
-      
-      // Attribution dynamique de la classe couleur pastel (défilé 0 à 5)
       lane.className = `lane-v2 lane-color-${index % 6}`;
 
       const progressPct = Math.min((jData.position / MAX_THEORETICAL_POINTS) * 82 + 2, 85);
@@ -897,7 +921,7 @@
     }
   }
 
-  // 7. ÉCRAN FIN (Gestion des égalités + Confettis)
+  // 7. ÉCRAN FIN ET GESTION DU CLASSEMENT
   function showEndScreen(joueursObj) {
     localStorage.removeItem('race_sessionCode');
     showScreen('screen-end');
@@ -941,9 +965,59 @@
         <p style="font-size:1.1rem; margin-top:8px;">Ils terminent ex æquo en tête avec <strong>${maxScore} points</strong> chacun !</p>
       `;
     }
+
+    // AFFICHER LE BOUTON CLASSEMENT UNIQUEMENT POUR L'ANIMATEUR
+    if (isAnimator) {
+      document.getElementById('btn-show-leaderboard').style.display = 'block';
+      buildLeaderboard(joueursArr);
+    }
   }
 
-  // GENERATEUR DE CONFETTIS
+  // CONSTRUIRE LE CLASSEMENT DE TOUS LES PARTICIPANTS
+  function buildLeaderboard(joueursArr) {
+    // Trier du plus grand score au plus petit
+    const sorted = [...joueursArr].sort((a, b) => b.position - a.position);
+    const listContainer = document.getElementById('leaderboard-list');
+    listContainer.innerHTML = '';
+
+    sorted.forEach((player, idx) => {
+      const avatarInfo = AVATARS.find(a => a.id === player.avatar) || {};
+      const rank = idx + 1;
+      let badgeRank = `#${rank}`;
+      let topClass = '';
+
+      if (rank === 1) { badgeRank = '🥇 1er'; topClass = 'top-1'; }
+      else if (rank === 2) { badgeRank = '🥈 2e'; topClass = 'top-2'; }
+      else if (rank === 3) { badgeRank = '🥉 3e'; topClass = 'top-3'; }
+
+      const item = document.createElement('div');
+      item.className = `leaderboard-item ${topClass}`;
+      item.innerHTML = `
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span style="font-size:1.1rem; width:50px;">${badgeRank}</span>
+          <img src="${avatarInfo.img}" style="width:36px; height:36px; object-fit:contain;" onerror="this.style.display='none'">
+          <span style="font-size:1rem; color:var(--dark);">${player.name}</span>
+        </div>
+        <span style="color:var(--primary); font-size:1.05rem;">${player.position} pts</span>
+      `;
+      listContainer.appendChild(item);
+    });
+  }
+
+  // BASCULER L'AFFICHAGE DU CLASSEMENT
+  function toggleLeaderboard() {
+    const panel = document.getElementById('leaderboard-panel');
+    const btn = document.getElementById('btn-show-leaderboard');
+    if (panel.style.display === 'none') {
+      panel.style.display = 'block';
+      btn.innerText = '📊 Masquer le Classement';
+    } else {
+      panel.style.display = 'none';
+      btn.innerText = '📊 Afficher le Classement';
+    }
+  }
+
+  // GÉNÉRATEUR DE CONFETTIS
   function launchConfetti() {
     const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9800'];
     for (let i = 0; i < 80; i++) {
