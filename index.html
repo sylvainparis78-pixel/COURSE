@@ -73,6 +73,7 @@
     .btn:hover { opacity: 0.9; }
     .btn-secondary { background-color: #6c757d; }
     .btn-warning { background-color: var(--accent); color: #000; }
+    .btn-small { padding: 6px 12px; font-size: 0.8rem; width: auto; margin: 0; }
 
     .avatar-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 8px; }
     .avatar-card { border: 2px solid var(--gray); border-radius: 12px; padding: 8px; text-align: center; cursor: pointer; transition: all 0.2s; background: white; position: relative; }
@@ -211,7 +212,7 @@
     .player-profile-header {
       display: flex;
       align-items: center;
-      gap: 12px;
+      justify-content: space-between;
       background: #e3f2fd;
       border: 1px solid #bbe2f7;
       padding: 8px 12px;
@@ -288,7 +289,7 @@
     </div>
 
     <div class="card" id="avatar-section" style="display:none;">
-      <h2>Choisissez votre Mascot</h2>
+      <h2>Choisissez votre Mascotte</h2>
       <div class="form-group">
         <label for="input-player-name">Votre Pseudo / Équipe :</label>
         <input type="text" id="input-player-name" placeholder="Ex: Les Éclairs">
@@ -347,11 +348,14 @@
 
   <div id="screen-player" class="screen">
     <div class="player-profile-header">
-      <img id="player-card-avatar" src="" class="player-profile-avatar" alt="Avatar">
-      <div>
-        <div style="font-size:0.75rem; color:#666;">Équipe :</div>
-        <div id="player-card-name" class="player-profile-name">-</div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <img id="player-card-avatar" src="" class="player-profile-avatar" alt="Avatar">
+        <div>
+          <div style="font-size:0.75rem; color:#666;">Équipe :</div>
+          <div id="player-card-name" class="player-profile-name">-</div>
+        </div>
       </div>
+      <button class="btn btn-secondary btn-small" onclick="leaveSession()">Quitter</button>
     </div>
 
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -383,7 +387,7 @@
       <div id="winner-banner"></div>
     </div>
 
-    <button class="btn" style="margin-top:15px;" onclick="location.reload()">Retour au Menu</button>
+    <button class="btn" style="margin-top:15px;" onclick="leaveSession()">Retour au Menu</button>
   </div>
 
 </div>
@@ -414,7 +418,14 @@
 
   let QUESTIONS = [];
   let currentSessionId = "";
-  let playerId = "player_" + Math.random().toString(36).substring(2, 7);
+
+  // Identifiant unique réutilisé par le joueur sur son téléphone
+  let playerId = localStorage.getItem('race_playerId');
+  if (!playerId) {
+    playerId = "player_" + Math.random().toString(36).substring(2, 7);
+    localStorage.setItem('race_playerId', playerId);
+  }
+
   let selectedAvatarId = null;
   let isAnimator = false;
   let sessionData = {};
@@ -425,11 +436,23 @@
     document.getElementById(id).classList.add('active');
   }
 
-  // CHARGEMENT DU FICHIER JSON (SOIT PAR SELECTION, SOIT PAR FETCH)
+  // Nettoyage complet pour quitter une partie
+  function leaveSession() {
+    if (currentSessionId) {
+      db.ref(`courses/${currentSessionId}`).off();
+      db.ref(`courses/${currentSessionId}/joueurs`).off();
+    }
+    localStorage.removeItem('race_sessionCode');
+    currentSessionId = "";
+    selectedAvatarId = null;
+    document.getElementById('avatar-section').style.display = 'none';
+    showScreen('screen-welcome');
+  }
+
+  // CHARGEMENT DU FICHIER JSON
   async function loadQuestionsData() {
     const fileInput = document.getElementById('json-file-input');
-    
-    // 1. Si un fichier a été sélectionné manuellement via le bouton
+
     if (fileInput.files && fileInput.files[0]) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -446,7 +469,6 @@
       });
     }
 
-    // 2. Sinon, tente de charger questions.json à la racine
     try {
       const response = await fetch('questions.json?t=' + Date.now());
       if (response.ok) {
@@ -494,20 +516,31 @@
     });
   }
 
-  // 2. CHECK & AVATARS
+  // 2. VERIFICATION DU CODE ET CHARGEMENT DES AVATARS
   function checkAndLoadAvatars() {
     const code = document.getElementById('input-session-code').value.trim().toUpperCase();
     if (!code) { alert("Veuillez saisir un code de partie."); return; }
 
+    // Si on change de session, nettoyer l'ancienne écoute
+    if (currentSessionId && currentSessionId !== code) {
+      db.ref(`courses/${currentSessionId}`).off();
+      db.ref(`courses/${currentSessionId}/joueurs`).off();
+    }
+
     currentSessionId = code;
+    selectedAvatarId = null;
+
     db.ref(`courses/${code}`).once('value').then(snapshot => {
       const data = snapshot.val();
       if (!data) {
-        alert("Session introuvable.");
+        alert("Session introuvable. Demandez le code à l'animateur.");
         return;
       }
+
       document.getElementById('avatar-section').style.display = 'block';
-      
+
+      // Écoute dynamique des avatars occupés
+      db.ref(`courses/${code}/joueurs`).off();
       db.ref(`courses/${code}/joueurs`).on('value', snapJoueurs => {
         renderAvatarSelector(snapJoueurs.val() || {});
       });
@@ -517,13 +550,16 @@
   }
 
   function renderAvatarSelector(joueurs) {
-    const takenAvatars = Object.values(joueurs).map(j => j.avatar);
+    const takenAvatars = Object.entries(joueurs)
+      .filter(([pKey, jData]) => pKey !== playerId)
+      .map(([pKey, jData]) => jData.avatar);
+
     const container = document.getElementById('avatar-selector');
     container.innerHTML = '';
 
     AVATARS.forEach(av => {
-      const isTaken = takenAvatars.includes(av.id) && (selectedAvatarId !== av.id);
-      const isSelected = selectedAvatarId === av.id;
+      const isTaken = takenAvatars.includes(av.id);
+      const isSelected = (selectedAvatarId === av.id);
 
       const card = document.createElement('div');
       card.className = `avatar-card ${isSelected ? 'selected' : ''} ${isTaken ? 'disabled' : ''}`;
@@ -543,7 +579,7 @@
     });
   }
 
-  // 3. REJOINDRE
+  // 3. REJOINDRE LA PARTIE
   function joinGame() {
     const name = document.getElementById('input-player-name').value.trim();
     if (!name) { alert("Saisissez votre nom ou votre équipe."); return; }
@@ -553,11 +589,13 @@
     document.getElementById('player-card-name').innerText = name;
     document.getElementById('player-card-avatar').src = avatarInfo.img;
 
+    // Enregistrer le joueur sur Firebase
     db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).set({
       name: name,
       avatar: selectedAvatarId,
       position: 0
     }).then(() => {
+      localStorage.setItem('race_sessionCode', currentSessionId);
       listenToCourse();
       showScreen('screen-player');
     }).catch(err => {
@@ -567,9 +605,12 @@
 
   // 4. ÉCOUTE TEMPS RÉEL
   function listenToCourse() {
+    if (!currentSessionId) return;
+
     if (isAnimator) document.getElementById('animator-session-id').innerText = "CODE: " + currentSessionId;
     else document.getElementById('player-session-id').innerText = "CODE: " + currentSessionId;
 
+    db.ref(`courses/${currentSessionId}`).off();
     db.ref(`courses/${currentSessionId}`).on('value', snapshot => {
       sessionData = snapshot.val() || {};
       const joueurs = sessionData.joueurs || {};
@@ -705,7 +746,6 @@
   // 6. INTERFACE MOBILES
   function updatePlayerUI() {
     const qIndex = sessionData.currentQuestion;
-
     if (qIndex === undefined || qIndex < 0 || !QUESTIONS || QUESTIONS.length === 0 || qIndex >= QUESTIONS.length) {
       document.getElementById('player-wait-screen').style.display = 'block';
       document.getElementById('player-question-zone').style.display = 'none';
@@ -773,35 +813,30 @@
     }
   }
 
-// 7. ÉCRAN FIN (Gestion des égalités)
+  // 7. ÉCRAN FIN (Gestion des égalités)
   function showEndScreen(joueursObj) {
+    localStorage.removeItem('race_sessionCode');
     showScreen('screen-end');
+
     const joueursArr = Object.values(joueursObj);
     if (joueursArr.length === 0) return;
 
-    // 1. Trouver le score maximum
     const maxScore = Math.max(...joueursArr.map(j => j.position));
-
-    // 2. Récupérer tous les joueurs qui ont ce score max
     const winners = joueursArr.filter(j => j.position === maxScore);
 
     const bannerContainer = document.getElementById('winner-banner');
 
     if (winners.length === 1) {
-      // Cas : Un seul vainqueur
       const winner = winners[0];
       const winnerAvatar = AVATARS.find(a => a.id === winner.avatar) || {};
-
       bannerContainer.innerHTML = `
         <img src="${winnerAvatar.img}" style="width:120px; height:120px; object-fit:contain; margin-bottom:12px;" onerror="this.style.display='none'">
         <h2 style="color:var(--success); font-size:1.6rem;">🎉 Félicitations à ${winner.name} ! 🎉</h2>
         <p style="font-size:1.1rem; margin-top:8px;">Grand Vainqueur de la course avec <strong>${winner.position} points</strong> !</p>
       `;
     } else {
-      // Cas : Égalité (plusieurs vainqueurs)
       const winnersNames = winners.map(w => w.name).join(', ');
-      
-      // Génération des avatars côte à côte
+
       let avatarsHtml = '<div style="display:flex; justify-content:center; gap:15px; flex-wrap:wrap; margin-bottom:15px;">';
       winners.forEach(w => {
         const av = AVATARS.find(a => a.id === w.avatar) || {};
@@ -821,7 +856,34 @@
         <p style="font-size:1.1rem; margin-top:8px;">Ils terminent ex æquo en tête avec <strong>${maxScore} points</strong> chacun !</p>
       `;
     }
-  }  
+  }
+
+  // 8. RECONNEXION AUTOMATIQUE (Sécurisée)
+  function checkAutoReconnect() {
+    const savedCode = localStorage.getItem('race_sessionCode');
+    if (!savedCode) return;
+
+    db.ref(`courses/${savedCode}`).once('value').then(snapshot => {
+      const session = snapshot.val();
+      // On reconnecte uniquement si la session est active/en attente ET que le joueur y est inscrit
+      if (session && session.status !== 'finished' && session.joueurs && session.joueurs[playerId]) {
+        const myPlayerData = session.joueurs[playerId];
+        currentSessionId = savedCode;
+        selectedAvatarId = myPlayerData.avatar;
+
+        const avatarInfo = AVATARS.find(a => a.id === myPlayerData.avatar) || AVATARS[0];
+        document.getElementById('player-card-name').innerText = myPlayerData.name;
+        document.getElementById('player-card-avatar').src = avatarInfo.img;
+
+        listenToCourse();
+        showScreen('screen-player');
+      } else {
+        localStorage.removeItem('race_sessionCode');
+      }
+    });
+  }
+
+  window.addEventListener('DOMContentLoaded', checkAutoReconnect);
 
 </script>
 
