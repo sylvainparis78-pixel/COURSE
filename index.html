@@ -21,7 +21,7 @@
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background-color: var(--light); color: var(--dark); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 10px; }
+    body { background-color: var(--light); color: var(--dark); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 10px; overflow-x: hidden; }
 
     .app-container {
       width: 100%;
@@ -124,43 +124,53 @@
       border-color: var(--success) !important;
     }
 
+    /* --- PISTE DE COURSE SANS IMAGE DE FOND --- */
     .race-track-v2 {
-      background: linear-gradient(180deg, #6c727c 0%, #4a4d52 100%);
-      border: 3px solid #8e95a0;
+      background: #1e293b;
+      border: 3px solid #0f172a;
       border-radius: 12px;
-      padding: 16px;
+      padding: 12px 16px;
       display: flex;
       flex-direction: column;
       justify-content: space-evenly;
       position: relative;
       overflow: hidden;
-      box-shadow: inset 0 0 15px rgba(0,0,0,0.3);
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.6);
       height: 100%;
     }
 
+    /* COULOIRS EN COULEURS PASTEL DISTINCTES */
     .lane-v2 {
       position: relative;
-      height: calc(100% / 6 - 10px);
+      height: calc(100% / 6 - 8px);
       min-height: 48px;
-      background: rgba(255, 255, 255, 0.18);
-      border-radius: 27px;
-      border: 1px dashed rgba(255, 255, 255, 0.4);
+      border-radius: 25px;
       display: flex;
       align-items: center;
       padding: 0 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+      transition: background-color 0.3s ease;
     }
+
+    /* Définition des 6 couleurs pastel */
+    .lane-v2.lane-color-0 { background-color: #B2FBA5; border: 2px solid #8BEA7A; } /* Vert pastel */
+    .lane-v2.lane-color-1 { background-color: #FFC3A0; border: 2px solid #FFA07A; } /* Pêche pastel */
+    .lane-v2.lane-color-2 { background-color: #A2E8DD; border: 2px solid #72D6C7; } /* Vert d'eau pastel */
+    .lane-v2.lane-color-3 { background-color: #FFDFBA; border: 2px solid #FBC280; } /* Jaune/Orange pastel */
+    .lane-v2.lane-color-4 { background-color: #D4A5FF; border: 2px solid #BB80FF; } /* Violet pastel */
+    .lane-v2.lane-color-5 { background-color: #BAE1FF; border: 2px solid #84C5FF; } /* Bleu pastel */
 
     .lane-v2 .player-tag {
       position: absolute;
       left: 12px;
       z-index: 2;
-      color: #fff;
+      color: #1e1e24;
       font-size: 0.85rem;
       font-weight: bold;
-      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
-      background: rgba(0,0,0,0.6);
+      background: rgba(255, 255, 255, 0.85);
       padding: 3px 10px;
       border-radius: 10px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
     .lane-v2 .finish-line {
@@ -172,41 +182,91 @@
       background: repeating-linear-gradient(0deg, #fff, #fff 8px, #000 8px, #000 16px);
       border-radius: 2px;
       z-index: 1;
+      box-shadow: 0 0 5px rgba(0,0,0,0.3);
     }
 
     .runner-avatar {
       position: absolute;
       left: 10px;
-      height: 80%;
-      max-height: 50px;
+      height: 85%;
+      max-height: 55px;
       width: auto;
       object-fit: contain;
-      transition: left 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+      transition: left 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
       z-index: 3;
-      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4));
+      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
+      animation: bounceRun 0.6s infinite alternate ease-in-out;
+    }
+
+    @keyframes bounceRun {
+      from { transform: translateY(0px) rotate(-1deg); }
+      to   { transform: translateY(-3px) rotate(1deg); }
+    }
+
+    /* --- EFFET 1 : HALO LUMINEUX (JOUEUR EN TÊTE) --- */
+    .leader-halo {
+      filter: drop-shadow(0 0 12px #FFD700) drop-shadow(0 0 20px #FF8C00) !important;
+      animation: leaderGlow 0.8s infinite alternate ease-in-out !important;
+    }
+
+    @keyframes leaderGlow {
+      from { transform: translateY(0px) scale(1); filter: drop-shadow(0 0 8px #FFD700) drop-shadow(0 0 15px #FF8C00); }
+      to   { transform: translateY(-4px) scale(1.08); filter: drop-shadow(0 0 16px #FFF700) drop-shadow(0 0 25px #FF4500); }
+    }
+
+    /* --- EFFET 2 : FUMÉE / BOOST (PREMIER À RÉPONDRE) --- */
+    .smoke-container {
+      position: absolute;
+      z-index: 2;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      transition: left 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .smoke-puff {
+      width: 18px;
+      height: 18px;
+      background: rgba(100, 100, 100, 0.7);
+      border-radius: 50%;
+      position: absolute;
+      animation: puffAnim 0.7s infinite linear;
+    }
+
+    .smoke-puff:nth-child(1) { left: -10px; animation-delay: 0s; }
+    .smoke-puff:nth-child(2) { left: -22px; animation-delay: 0.2s; width: 22px; height: 22px; }
+    .smoke-puff:nth-child(3) { left: -36px; animation-delay: 0.4s; width: 26px; height: 26px; }
+
+    @keyframes puffAnim {
+      0% { transform: scale(0.4) translateY(0); opacity: 0.9; background: #FFA500; }
+      50% { opacity: 0.6; background: rgba(120, 120, 120, 0.7); }
+      100% { transform: scale(1.6) translateY(-8px); opacity: 0; background: rgba(200, 200, 200, 0); }
     }
 
     .fastest-rocket {
       position: absolute;
-      font-size: 1.4rem;
+      font-size: 1.3rem;
       z-index: 4;
-      transition: all 0.5s ease;
-      animation: boost 0.8s infinite alternate ease-in-out;
-      filter: drop-shadow(0 0 6px rgba(255, 152, 0, 0.8));
+      transition: left 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+      animation: boostRocket 0.6s infinite alternate ease-in-out;
+      filter: drop-shadow(0 0 8px rgba(255, 152, 0, 0.9));
     }
 
-    @keyframes boost {
+    @keyframes boostRocket {
       from { transform: translateY(-2px) scale(1); }
-      to { transform: translateY(2px) scale(1.15); }
+      to   { transform: translateY(2px) scale(1.2); }
     }
 
     .score-badge {
       position: absolute;
       right: 40px;
-      color: #ffd54f;
+      color: #1e1e24;
       font-weight: bold;
-      font-size: 0.95rem;
-      text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+      font-size: 0.9rem;
+      background: rgba(255, 255, 255, 0.85);
+      padding: 2px 8px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
     .player-profile-header {
@@ -265,6 +325,21 @@
 
     .screen { display: none; }
     .screen.active { display: block; }
+
+    /* --- EFFET 3 : CONFETTIS DE VICTOIRE --- */
+    .confetti {
+      position: fixed;
+      width: 10px;
+      height: 10px;
+      z-index: 9999;
+      top: -10px;
+      animation: confettiFall linear infinite;
+    }
+
+    @keyframes confettiFall {
+      0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+    }
   </style>
 </head>
 <body>
@@ -309,7 +384,6 @@
     </div>
   </div>
 
-
   <div id="screen-animator" class="screen" style="height: 100%;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
       <span id="animator-session-id" style="font-weight:bold; color:var(--primary); font-size:1.1rem;">CODE: ----</span>
@@ -345,7 +419,6 @@
     </div>
   </div>
 
-
   <div id="screen-player" class="screen">
     <div class="player-profile-header">
       <div style="display:flex; align-items:center; gap:10px;">
@@ -378,7 +451,6 @@
       <div id="feedback-msg" style="margin-top:10px; font-weight:bold; text-align:center; font-size:1.05rem;"></div>
     </div>
   </div>
-
 
   <div id="screen-end" class="screen" style="text-align:center;">
     <h1>🏆 Arrivée de la Course !</h1>
@@ -419,7 +491,6 @@
   let QUESTIONS = [];
   let currentSessionId = "";
 
-  // Identifiant unique réutilisé par le joueur sur son téléphone
   let playerId = localStorage.getItem('race_playerId');
   if (!playerId) {
     playerId = "player_" + Math.random().toString(36).substring(2, 7);
@@ -436,7 +507,6 @@
     document.getElementById(id).classList.add('active');
   }
 
-  // Nettoyage complet pour quitter une partie
   function leaveSession() {
     if (currentSessionId) {
       db.ref(`courses/${currentSessionId}`).off();
@@ -449,7 +519,6 @@
     showScreen('screen-welcome');
   }
 
-  // CHARGEMENT DU FICHIER JSON
   async function loadQuestionsData() {
     const fileInput = document.getElementById('json-file-input');
 
@@ -521,7 +590,6 @@
     const code = document.getElementById('input-session-code').value.trim().toUpperCase();
     if (!code) { alert("Veuillez saisir un code de partie."); return; }
 
-    // Si on change de session, nettoyer l'ancienne écoute
     if (currentSessionId && currentSessionId !== code) {
       db.ref(`courses/${currentSessionId}`).off();
       db.ref(`courses/${currentSessionId}/joueurs`).off();
@@ -539,7 +607,6 @@
 
       document.getElementById('avatar-section').style.display = 'block';
 
-      // Écoute dynamique des avatars occupés
       db.ref(`courses/${code}/joueurs`).off();
       db.ref(`courses/${code}/joueurs`).on('value', snapJoueurs => {
         renderAvatarSelector(snapJoueurs.val() || {});
@@ -589,7 +656,6 @@
     document.getElementById('player-card-name').innerText = name;
     document.getElementById('player-card-avatar').src = avatarInfo.img;
 
-    // Enregistrer le joueur sur Firebase
     db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).set({
       name: name,
       avatar: selectedAvatarId,
@@ -709,6 +775,7 @@
     }
   }
 
+  // AFFICHAGE DE LA PISTE AVEC COULOIRS PASTELS ET EFFETS
   function updateRaceTrackV2(joueursObj, firstCorrectKey) {
     const trackContainer = document.getElementById('race-track-v2');
     trackContainer.innerHTML = '';
@@ -720,20 +787,37 @@
     }
 
     const MAX_THEORETICAL_POINTS = Math.max(QUESTIONS.length * 2, 10);
+    const maxCurrentScore = Math.max(...entries.map(([_, j]) => j.position || 0));
 
-    entries.forEach(([pKey, jData]) => {
+    entries.forEach(([pKey, jData], index) => {
       const avatarInfo = AVATARS.find(a => a.id === jData.avatar) || AVATARS[0];
       const lane = document.createElement('div');
-      lane.className = 'lane-v2';
+      
+      // Attribution dynamique de la classe couleur pastel (défilé 0 à 5)
+      lane.className = `lane-v2 lane-color-${index % 6}`;
 
       const progressPct = Math.min((jData.position / MAX_THEORETICAL_POINTS) * 82 + 2, 85);
 
+      const isLeader = (jData.position > 0 && jData.position === maxCurrentScore);
       const isFastest = (firstCorrectKey === pKey);
-      const rocketHtml = isFastest ? `<span class="fastest-rocket" style="left: calc(${progressPct}% + 45px);">🚀</span>` : '';
+
+      let smokeHtml = '';
+      let rocketHtml = '';
+      if (isFastest) {
+        smokeHtml = `
+          <div class="smoke-container" style="left: calc(${progressPct}% - 10px);">
+            <div class="smoke-puff"></div>
+            <div class="smoke-puff"></div>
+            <div class="smoke-puff"></div>
+          </div>
+        `;
+        rocketHtml = `<span class="fastest-rocket" style="left: calc(${progressPct}% + 45px);">🚀</span>`;
+      }
 
       lane.innerHTML = `
         <span class="player-tag">${jData.name}</span>
-        <img src="${avatarInfo.img}" class="runner-avatar" style="left: ${progressPct}%;" onerror="this.src='https://via.placeholder.com/44?text=X'">
+        ${smokeHtml}
+        <img src="${avatarInfo.img}" class="runner-avatar ${isLeader ? 'leader-halo' : ''}" style="left: ${progressPct}%;" onerror="this.src='https://via.placeholder.com/44?text=X'">
         ${rocketHtml}
         <span class="score-badge">${jData.position} pts</span>
         <div class="finish-line"></div>
@@ -813,10 +897,11 @@
     }
   }
 
-  // 7. ÉCRAN FIN (Gestion des égalités)
+  // 7. ÉCRAN FIN (Gestion des égalités + Confettis)
   function showEndScreen(joueursObj) {
     localStorage.removeItem('race_sessionCode');
     showScreen('screen-end');
+    launchConfetti();
 
     const joueursArr = Object.values(joueursObj);
     if (joueursArr.length === 0) return;
@@ -830,7 +915,7 @@
       const winner = winners[0];
       const winnerAvatar = AVATARS.find(a => a.id === winner.avatar) || {};
       bannerContainer.innerHTML = `
-        <img src="${winnerAvatar.img}" style="width:120px; height:120px; object-fit:contain; margin-bottom:12px;" onerror="this.style.display='none'">
+        <img src="${winnerAvatar.img}" style="width:120px; height:120px; object-fit:contain; margin-bottom:12px; filter: drop-shadow(0 0 15px #FFD700);" onerror="this.style.display='none'">
         <h2 style="color:var(--success); font-size:1.6rem;">🎉 Félicitations à ${winner.name} ! 🎉</h2>
         <p style="font-size:1.1rem; margin-top:8px;">Grand Vainqueur de la course avec <strong>${winner.position} points</strong> !</p>
       `;
@@ -842,7 +927,7 @@
         const av = AVATARS.find(a => a.id === w.avatar) || {};
         avatarsHtml += `
           <div style="text-align:center;">
-            <img src="${av.img}" style="width:80px; height:80px; object-fit:contain;" onerror="this.style.display='none'">
+            <img src="${av.img}" style="width:80px; height:80px; object-fit:contain; filter: drop-shadow(0 0 10px #FFD700);" onerror="this.style.display='none'">
             <div style="font-size:0.85rem; font-weight:bold; margin-top:4px;">${w.name}</div>
           </div>
         `;
@@ -858,14 +943,29 @@
     }
   }
 
-  // 8. RECONNEXION AUTOMATIQUE (Sécurisée)
+  // GENERATEUR DE CONFETTIS
+  function launchConfetti() {
+    const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9800'];
+    for (let i = 0; i < 80; i++) {
+      const confetti = document.createElement('div');
+      confetti.className = 'confetti';
+      confetti.style.left = Math.random() * 100 + 'vw';
+      confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+      confetti.style.animationDuration = (Math.random() * 2 + 2) + 's';
+      confetti.style.animationDelay = (Math.random() * 2) + 's';
+      document.body.appendChild(confetti);
+
+      setTimeout(() => { confetti.remove(); }, 5000);
+    }
+  }
+
+  // 8. RECONNEXION AUTOMATIQUE
   function checkAutoReconnect() {
     const savedCode = localStorage.getItem('race_sessionCode');
     if (!savedCode) return;
 
     db.ref(`courses/${savedCode}`).once('value').then(snapshot => {
       const session = snapshot.val();
-      // On reconnecte uniquement si la session est active/en attente ET que le joueur y est inscrit
       if (session && session.status !== 'finished' && session.joueurs && session.joueurs[playerId]) {
         const myPlayerData = session.joueurs[playerId];
         currentSessionId = savedCode;
