@@ -733,6 +733,13 @@
       sessionData = snapshot.val() || {};
       const joueurs = sessionData.joueurs || {};
 
+      // Si le joueur est connecté mais qu'il a été supprimé de Firebase par l'animateur
+      if (!isAnimator && sessionData && (!joueurs || !joueurs[playerId])) {
+        alert("Vous avez été retiré de la partie par l'animateur.");
+        leaveSession();
+        return;
+      }
+
       if (sessionData.questions && Array.isArray(sessionData.questions)) {
         QUESTIONS = sessionData.questions;
       }
@@ -924,6 +931,14 @@
 
   function submitAnswer(chosenIdx, correctIdx) {
     if (hasAnsweredCurrentQuestion) return;
+
+    // Si le joueur n'existe plus dans les données de la session
+    if (!sessionData.joueurs || !sessionData.joueurs[playerId]) {
+      alert("Vous avez été retiré de la partie par l'animateur.");
+      leaveSession();
+      return;
+    }
+
     hasAnsweredCurrentQuestion = true;
 
     const buttons = document.querySelectorAll('.btn-answer-mobile');
