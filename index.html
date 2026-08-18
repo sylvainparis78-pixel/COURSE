@@ -317,7 +317,33 @@
     .btn-answer-mobile.correct { background-color: var(--success) !important; color: white; border-color: var(--success); }
     .btn-answer-mobile.wrong { background-color: var(--danger) !important; color: white; border-color: var(--danger); }
 
-    .player-badge { display: inline-block; background: #e3f2fd; color: var(--primary); font-size: 0.8rem; font-weight: bold; padding: 4px 8px; border-radius: 6px; margin: 2px; }
+    .player-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #e3f2fd;
+      color: var(--primary);
+      font-size: 0.8rem;
+      font-weight: bold;
+      padding: 4px 8px;
+      border-radius: 6px;
+      margin: 2px;
+    }
+    .btn-delete-player {
+      background: var(--danger);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      line-height: 16px;
+      text-align: center;
+      font-size: 0.75rem;
+      font-weight: bold;
+      cursor: pointer;
+      margin-left: 4px;
+    }
+    .btn-delete-player:hover { opacity: 0.8; }
 
     /* STYLES CLASSEMENT ANIMATEUR */
     .leaderboard-list {
@@ -724,12 +750,22 @@
   }
 
   // 5. CONSOLE ANIMATEUR
+  function removePlayer(pKey) {
+    if (!currentSessionId || !pKey) return;
+    db.ref(`courses/${currentSessionId}/joueurs/${pKey}`).remove();
+  }
+
   function updateAnimatorUI(joueurs) {
     const listEl = document.getElementById('connected-players-list');
-    const joueursArr = Object.values(joueurs);
+    const entries = Object.entries(joueurs);
 
-    document.getElementById('count-connected').innerText = joueursArr.length;
-    listEl.innerHTML = joueursArr.map(j => `<span class="player-badge">${j.name}</span>`).join('') || 'Aucun participant';
+    document.getElementById('count-connected').innerText = entries.length;
+    listEl.innerHTML = entries.map(([pKey, j]) => `
+      <span class="player-badge">
+        ${j.name}
+        <button class="btn-delete-player" onclick="removePlayer('${pKey}')" title="Supprimer ce joueur">✕</button>
+      </span>
+    `).join('') || 'Aucun participant';
 
     updateRaceTrackV2(joueurs, sessionData.firstCorrectPlayer);
 
@@ -739,7 +775,7 @@
       document.getElementById('btn-start-game').style.display = 'none';
       document.getElementById('btn-next-q').style.display = 'block';
 
-      const totalConnected = joueursArr.length;
+      const totalConnected = entries.length;
       const totalAnswers = sessionData.answersCount || 0;
       document.getElementById('answers-tracker').innerText = `Réponses : ${totalAnswers} / ${totalConnected}`;
 
