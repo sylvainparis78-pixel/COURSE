@@ -345,7 +345,7 @@
     }
     .btn-delete-player:hover { opacity: 0.8; }
 
-    /* STYLES CLASSEMENT ANIMATEUR */
+    /* STYLES CLASSEMENT ANIMATEUR ET REVISION */
     .leaderboard-list {
       margin-top: 15px;
       display: flex;
@@ -366,6 +366,22 @@
     .leaderboard-item.top-1 { border-color: #FFD700; background: #FFFDF0; }
     .leaderboard-item.top-2 { border-color: #C0C0C0; background: #F8F9FA; }
     .leaderboard-item.top-3 { border-color: #CD7F32; background: #FFF8F0; }
+
+    .review-box {
+      background: #ffffff;
+      border: 2px solid var(--primary);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 15px;
+      text-align: left;
+    }
+    .review-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 15px;
+      gap: 10px;
+    }
 
     .screen { display: none; }
     .screen.active { display: block; }
@@ -501,13 +517,32 @@
     <div class="card" style="padding:30px 20px; margin-top:20px;">
       <div id="winner-banner"></div>
       
-      <button id="btn-show-leaderboard" class="btn btn-warning" style="display:none; max-width:300px; margin:20px auto 0 auto;" onclick="toggleLeaderboard()">
-        📊 Afficher le Classement
-      </button>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:20px;">
+        <button id="btn-show-leaderboard" class="btn btn-warning" style="display:none; max-width:280px; margin:0;" onclick="toggleLeaderboard()">
+          📊 Afficher le Classement
+        </button>
+        <button id="btn-show-review" class="btn btn-warning" style="display:none; max-width:280px; margin:0;" onclick="toggleReview()">
+          🔍 Revoir toutes les questions
+        </button>
+      </div>
 
       <div id="leaderboard-panel" style="display:none; margin-top:20px;">
         <h3 style="color:var(--primary); margin-bottom:10px;">Classement Général</h3>
         <div id="leaderboard-list" class="leaderboard-list"></div>
+      </div>
+
+      <div id="review-panel" style="display:none; margin-top:20px;">
+        <h3 style="color:var(--primary); margin-bottom:10px;">Révision des Questions</h3>
+        <div class="review-box">
+          <div style="font-weight:bold; color:var(--primary); margin-bottom:6px;" id="review-q-count">Question 1 / 1</div>
+          <div style="font-size:1.05rem; font-weight:600; margin-bottom:12px;" id="review-q-title"></div>
+          <ul id="review-options-list" class="animator-options-list"></ul>
+          
+          <div class="review-nav">
+            <button class="btn btn-secondary btn-small" id="btn-review-prev" onclick="changeReviewQuestion(-1)">← Précédente</button>
+            <button class="btn btn-secondary btn-small" id="btn-review-next" onclick="changeReviewQuestion(1)">Suivante →</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -553,6 +588,7 @@
   let isAnimator = false;
   let sessionData = {};
   let hasAnsweredCurrentQuestion = false;
+  let reviewQuestionIndex = 0;
 
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -733,7 +769,6 @@
       sessionData = snapshot.val() || {};
       const joueurs = sessionData.joueurs || {};
 
-      // Si le joueur est connecté mais qu'il a été supprimé de Firebase par l'animateur
       if (!isAnimator && sessionData && (!joueurs || !joueurs[playerId])) {
         alert("Vous avez été retiré de la partie par l'animateur.");
         leaveSession();
@@ -932,7 +967,6 @@
   function submitAnswer(chosenIdx, correctIdx) {
     if (hasAnsweredCurrentQuestion) return;
 
-    // Si le joueur n'existe plus dans les données de la session
     if (!sessionData.joueurs || !sessionData.joueurs[playerId]) {
       alert("Vous avez été retiré de la partie par l'animateur.");
       leaveSession();
@@ -1017,16 +1051,16 @@
       `;
     }
 
-    // AFFICHER LE BOUTON CLASSEMENT UNIQUEMENT POUR L'ANIMATEUR
+    // BOUTONS ANIMATEUR SEULEMENT
     if (isAnimator) {
-      document.getElementById('btn-show-leaderboard').style.display = 'block';
+      document.getElementById('btn-show-leaderboard').style.display = 'inline-block';
+      document.getElementById('btn-show-review').style.display = 'inline-block';
       buildLeaderboard(joueursArr);
     }
   }
 
   // CONSTRUIRE LE CLASSEMENT DE TOUS LES PARTICIPANTS
   function buildLeaderboard(joueursArr) {
-    // Trier du plus grand score au plus petit
     const sorted = [...joueursArr].sort((a, b) => b.position - a.position);
     const listContainer = document.getElementById('leaderboard-list');
     listContainer.innerHTML = '';
@@ -1055,7 +1089,6 @@
     });
   }
 
-  // BASCULER L'AFFICHAGE DU CLASSEMENT
   function toggleLeaderboard() {
     const panel = document.getElementById('leaderboard-panel');
     const btn = document.getElementById('btn-show-leaderboard');
@@ -1065,6 +1098,55 @@
     } else {
       panel.style.display = 'none';
       btn.innerText = '📊 Afficher le Classement';
+    }
+  }
+
+  // DÉFILEMENT DE RÉVISION DES QUESTIONS
+  function toggleReview() {
+    const panel = document.getElementById('review-panel');
+    const btn = document.getElementById('btn-show-review');
+    if (panel.style.display === 'none') {
+      panel.style.display = 'block';
+      btn.innerText = '🔍 Masquer la révision';
+      reviewQuestionIndex = 0;
+      renderReviewQuestion();
+    } else {
+      panel.style.display = 'none';
+      btn.innerText = '🔍 Revoir toutes les questions';
+    }
+  }
+
+  function renderReviewQuestion() {
+    if (!QUESTIONS || QUESTIONS.length === 0) return;
+
+    const q = QUESTIONS[reviewQuestionIndex];
+    document.getElementById('review-q-count').innerText = `Question ${reviewQuestionIndex + 1} / ${QUESTIONS.length}`;
+    document.getElementById('review-q-title').innerText = q.text;
+
+    const list = document.getElementById('review-options-list');
+    list.innerHTML = '';
+
+    q.options.forEach((opt, idx) => {
+      const li = document.createElement('li');
+      li.className = 'animator-option-item';
+      if (idx === q.correct) {
+        li.classList.add('correct-answer');
+        li.innerText = `✓ ${opt} (Bonne réponse)`;
+      } else {
+        li.innerText = opt;
+      }
+      list.appendChild(li);
+    });
+
+    document.getElementById('btn-review-prev').disabled = (reviewQuestionIndex === 0);
+    document.getElementById('btn-review-next').disabled = (reviewQuestionIndex === QUESTIONS.length - 1);
+  }
+
+  function changeReviewQuestion(delta) {
+    const newIdx = reviewQuestionIndex + delta;
+    if (newIdx >= 0 && newIdx < QUESTIONS.length) {
+      reviewQuestionIndex = newIdx;
+      renderReviewQuestion();
     }
   }
 
