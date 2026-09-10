@@ -317,17 +317,28 @@
     .btn-answer-mobile.correct { background-color: var(--success) !important; color: white; border-color: var(--success); }
     .btn-answer-mobile.wrong { background-color: var(--danger) !important; color: white; border-color: var(--danger); }
 
+    /* STYLES BADGES D'ÉTAT DE RÉPONSE DANS LA CONSOLE ANIMATEUR */
     .player-badge {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
-      background: #e3f2fd;
-      color: var(--primary);
+      gap: 6px;
       font-size: 0.8rem;
       font-weight: bold;
-      padding: 4px 8px;
-      border-radius: 6px;
-      margin: 2px;
+      padding: 5px 10px;
+      border-radius: 8px;
+      margin: 3px;
+      transition: all 0.3s ease;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .player-badge.status-waiting {
+      background: #fff3cd;
+      color: #856404;
+      border: 1px solid #ffeeba;
+    }
+    .player-badge.status-answered {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
     }
     .btn-delete-player {
       background: var(--danger);
@@ -341,9 +352,102 @@
       font-size: 0.75rem;
       font-weight: bold;
       cursor: pointer;
-      margin-left: 4px;
+      margin-left: 2px;
     }
     .btn-delete-player:hover { opacity: 0.8; }
+
+    /* --- STYLES PODIUM ENGAGEANT ET CHALEUREUX --- */
+    .podium-container {
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      gap: 15px;
+      margin: 25px auto 10px auto;
+      max-width: 650px;
+      min-height: 240px;
+    }
+    .podium-step {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      position: relative;
+    }
+    .podium-step .players-group {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      align-items: flex-end;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .podium-player {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+    @keyframes popIn {
+      0% { transform: scale(0); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .podium-player img {
+      width: 55px;
+      height: 55px;
+      object-fit: contain;
+      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.2));
+    }
+    .podium-player-name {
+      font-size: 0.85rem;
+      font-weight: bold;
+      color: var(--dark);
+      background: white;
+      padding: 2px 8px;
+      border-radius: 10px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-top: 2px;
+      white-space: nowrap;
+    }
+    .podium-block {
+      width: 100%;
+      border-radius: 12px 12px 0 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+      position: relative;
+      background: linear-gradient(135deg, #f0f0f0, #e0e0e0);
+    }
+    .podium-step.rank-1 .podium-block {
+      height: 140px;
+      background: linear-gradient(135deg, #FFD700, #FFA500);
+      border: 2px solid #FFF700;
+    }
+    .podium-step.rank-2 .podium-block {
+      height: 105px;
+      background: linear-gradient(135deg, #C0C0C0, #909090);
+      border: 2px solid #E6E6E6;
+    }
+    .podium-step.rank-3 .podium-block {
+      height: 75px;
+      background: linear-gradient(135deg, #CD7F32, #A0522D);
+      border: 2px solid #F4A460;
+    }
+    .podium-rank-num {
+      font-size: 1.8rem;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    .podium-score {
+      font-size: 0.85rem;
+      background: rgba(0,0,0,0.25);
+      padding: 2px 8px;
+      border-radius: 10px;
+      margin-top: 4px;
+    }
 
     /* STYLES CLASSEMENT ANIMATEUR ET REVISION */
     .leaderboard-list {
@@ -518,12 +622,21 @@
       <div id="winner-banner"></div>
       
       <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:20px;">
+        <button id="btn-show-podium" class="btn btn-warning" style="display:none; max-width:280px; margin:0;" onclick="togglePodium()">
+          🥇 Afficher le Podium
+        </button>
         <button id="btn-show-leaderboard" class="btn btn-warning" style="display:none; max-width:280px; margin:0;" onclick="toggleLeaderboard()">
-          📊 Afficher le Classement
+          📊 Afficher le Classement Complete
         </button>
         <button id="btn-show-review" class="btn btn-warning" style="display:none; max-width:280px; margin:0;" onclick="toggleReview()">
           🔍 Revoir toutes les questions
         </button>
+      </div>
+
+      <!-- PANEL PODIUM (ENGAGEANT ET CHALEUREUX) -->
+      <div id="podium-panel" style="display:none; margin-top:20px; animation: fadeIn 0.5s ease-in;">
+        <h3 style="color:var(--primary); font-size:1.3rem;">🎉 Le Podium des Champions 🎉</h3>
+        <div id="podium-display" class="podium-container"></div>
       </div>
 
       <div id="leaderboard-panel" style="display:none; margin-top:20px;">
@@ -747,7 +860,8 @@
     db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).set({
       name: name,
       avatar: selectedAvatarId,
-      position: 0
+      position: 0,
+      hasAnswered: false
     }).then(() => {
       localStorage.setItem('race_sessionCode', currentSessionId);
       listenToCourse();
@@ -802,12 +916,20 @@
     const entries = Object.entries(joueurs);
 
     document.getElementById('count-connected').innerText = entries.length;
-    listEl.innerHTML = entries.map(([pKey, j]) => `
-      <span class="player-badge">
-        ${j.name}
-        <button class="btn-delete-player" onclick="removePlayer('${pKey}')" title="Supprimer ce joueur">✕</button>
-      </span>
-    `).join('') || 'Aucun participant';
+
+    // Mise à jour de la liste des joueurs avec couleur selon état de réponse
+    listEl.innerHTML = entries.map(([pKey, j]) => {
+      const isAnswered = j.hasAnswered === true;
+      const statusClass = isAnswered ? 'status-answered' : 'status-waiting';
+      const statusIcon = isAnswered ? '✓' : '⌛';
+
+      return `
+        <span class="player-badge ${statusClass}">
+          <span>${statusIcon} ${j.name}</span>
+          <button class="btn-delete-player" onclick="removePlayer('${pKey}')" title="Supprimer ce joueur">✕</button>
+        </span>
+      `;
+    }).join('') || 'Aucun participant';
 
     updateRaceTrackV2(joueurs, sessionData.firstCorrectPlayer);
 
@@ -856,6 +978,14 @@
   }
 
   function startFirstQuestion() {
+    // Réinitialiser le statut de réponse pour tous les joueurs
+    db.ref(`courses/${currentSessionId}/joueurs`).once('value', snap => {
+      const joueurs = snap.val() || {};
+      Object.keys(joueurs).forEach(pKey => {
+        db.ref(`courses/${currentSessionId}/joueurs/${pKey}/hasAnswered`).set(false);
+      });
+    });
+
     db.ref(`courses/${currentSessionId}`).update({
       status: 'active',
       currentQuestion: 0,
@@ -867,6 +997,15 @@
 
   function forceNextQuestion() {
     const nextQ = (sessionData.currentQuestion || 0) + 1;
+
+    // Réinitialiser le statut de réponse pour tous les joueurs
+    db.ref(`courses/${currentSessionId}/joueurs`).once('value', snap => {
+      const joueurs = snap.val() || {};
+      Object.keys(joueurs).forEach(pKey => {
+        db.ref(`courses/${currentSessionId}/joueurs/${pKey}/hasAnswered`).set(false);
+      });
+    });
+
     if (nextQ >= QUESTIONS.length) {
       db.ref(`courses/${currentSessionId}`).update({ status: 'finished' });
     } else {
@@ -984,6 +1123,8 @@
 
     const feedbackEl = document.getElementById('feedback-msg');
 
+    // Mettre à jour l'état de réponse du joueur dans Firebase
+    db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ hasAnswered: true });
     db.ref(`courses/${currentSessionId}/answersCount`).transaction(count => (count || 0) + 1);
 
     if (isCorrect) {
@@ -1006,7 +1147,7 @@
     }
   }
 
-  // 7. ÉCRAN FIN ET GESTION DU CLASSEMENT
+  // 7. ÉCRAN FIN ET GESTION DU CLASSEMENT / PODIUM
   function showEndScreen(joueursObj) {
     localStorage.removeItem('race_sessionCode');
     showScreen('screen-end');
@@ -1053,9 +1194,100 @@
 
     // BOUTONS ANIMATEUR SEULEMENT
     if (isAnimator) {
+      document.getElementById('btn-show-podium').style.display = 'inline-block';
       document.getElementById('btn-show-leaderboard').style.display = 'inline-block';
       document.getElementById('btn-show-review').style.display = 'inline-block';
+      buildPodium(joueursArr);
       buildLeaderboard(joueursArr);
+    }
+  }
+
+  // CONSTRUIRE LE PODIUM AVEC GESTION DES ÉGALITÉS ET DES RANGS SUTANTS
+  function buildPodium(joueursArr) {
+    const podiumDisplay = document.getElementById('podium-display');
+    podiumDisplay.innerHTML = '';
+
+    // Tri par score décroissant
+    const sorted = [...joueursArr].sort((a, b) => b.position - a.position);
+
+    // Groupement par score
+    const scoreGroups = [];
+    sorted.forEach(player => {
+      let group = scoreGroups.find(g => g.score === player.position);
+      if (!group) {
+        group = { score: player.position, players: [] };
+        scoreGroups.push(group);
+      }
+      group.players.push(player);
+    });
+
+    // Attribuer les rangs réels
+    let currentRank = 1;
+    const rankedGroups = [];
+
+    scoreGroups.forEach(group => {
+      if (currentRank <= 3) {
+        rankedGroups.push({ rank: currentRank, score: group.score, players: group.players });
+      }
+      currentRank += group.players.length; // Décale le rang suivant du nombre de joueurs ex-æquo
+    });
+
+    // Structure des 3 colonnes du podium : 2eme (Gauche), 1er (Centre), 3eme (Droite)
+    const podiumStructure = [
+      { rank: 2, icon: '🥈', label: '2e', class: 'rank-2' },
+      { rank: 1, icon: '🥇', label: '1er', class: 'rank-1' },
+      { rank: 3, icon: '🥉', label: '3e', class: 'rank-3' }
+    ];
+
+    podiumStructure.forEach(slot => {
+      const groupData = rankedGroups.find(g => g.rank === slot.rank);
+
+      const step = document.createElement('div');
+      step.className = `podium-step ${slot.class}`;
+
+      if (groupData) {
+        let playersHtml = '<div class="players-group">';
+        groupData.players.forEach(p => {
+          const av = AVATARS.find(a => a.id === p.avatar) || {};
+          playersHtml += `
+            <div class="podium-player">
+              <img src="${av.img}" alt="${p.name}" onerror="this.src='https://via.placeholder.com/55?text=X'">
+              <span class="podium-player-name">${p.name}</span>
+            </div>
+          `;
+        });
+        playersHtml += '</div>';
+
+        step.innerHTML = `
+          ${playersHtml}
+          <div class="podium-block">
+            <span class="podium-rank-num">${slot.icon}</span>
+            <span class="podium-score">${groupData.score} pts</span>
+          </div>
+        `;
+      } else {
+        // Emplacement vide si pas assez de joueurs
+        step.innerHTML = `
+          <div class="podium-block" style="opacity: 0.4;">
+            <span class="podium-rank-num">${slot.icon}</span>
+            <span class="podium-score">-</span>
+          </div>
+        `;
+      }
+
+      podiumDisplay.appendChild(step);
+    });
+  }
+
+  function togglePodium() {
+    const panel = document.getElementById('podium-panel');
+    const btn = document.getElementById('btn-show-podium');
+    if (panel.style.display === 'none') {
+      panel.style.display = 'block';
+      btn.innerText = '🥇 Masquer le Podium';
+    } else {
+      panel.style.display = 'none';
+      btn.innerText = '🥇 Afficher le Podium';
     }
   }
 
