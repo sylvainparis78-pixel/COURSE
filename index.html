@@ -849,27 +849,45 @@
 
   // 3. REJOINDRE LA PARTIE
   function joinGame() {
-    const name = document.getElementById('input-player-name').value.trim();
-    if (!name) { alert("Saisissez votre nom ou votre équipe."); return; }
-    if (!selectedAvatarId) { alert("Sélectionnez un avatar."); return; }
+  const name = document.getElementById('input-player-name').value.trim();
+  if (!name) { alert("Saisissez votre nom ou votre équipe."); return; }
+  if (!selectedAvatarId) { alert("Sélectionnez un avatar."); return; }
 
-    const avatarInfo = AVATARS.find(a => a.id === selectedAvatarId);
-    document.getElementById('player-card-name').innerText = name;
-    document.getElementById('player-card-avatar').src = avatarInfo.img;
+  const joueursRef = db.ref(`courses/${currentSessionId}/joueurs`);
 
-    db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).set({
+  joueursRef.transaction((joueurs) => {
+    joueurs = joueurs || {};
+    
+    // Vérifier si l'avatar est déjà pris par un autre joueur
+    const isTaken = Object.entries(joueurs).some(
+      ([pKey, jData]) => pKey !== playerId && jData.avatar === selectedAvatarId
+    );
+
+    if (isTaken) {
+      return; // Annule la transaction
+    }
+
+    // Réserve l'avatar pour ce joueur
+    joueurs[playerId] = {
       name: name,
       avatar: selectedAvatarId,
       position: 0,
       hasAnswered: false
-    }).then(() => {
+    };
+
+    return joueurs;
+  }, (error, committed) => {
+    if (error) {
+      alert("Erreur de connexion : " + error.message);
+    } else if (!committed) {
+      alert("Cette mascotte vient d'être choisie par un autre joueur !");
+    } else {
       localStorage.setItem('race_sessionCode', currentSessionId);
       listenToCourse();
       showScreen('screen-player');
-    }).catch(err => {
-      alert("Impossible de rejoindre : " + err.message);
-    });
-  }
+    }
+  });
+}
 
   // 4. ÉCOUTE TEMPS RÉEL
   function listenToCourse() {
