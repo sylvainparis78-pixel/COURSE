@@ -988,7 +988,7 @@
 
       if (allHaveAnswered && !sessionData.autoSwitching) {
         db.ref(`courses/${currentSessionId}`).update({ autoSwitching: true });
-        setTimeout(() => { forceNextQuestion(); }, 2000);
+        setTimeout(() => { forceNextQuestion(); }, 3000);
       }
     } else {
       document.getElementById('animator-q-box').style.display = 'none';
