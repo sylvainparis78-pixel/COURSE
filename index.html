@@ -110,19 +110,39 @@
       flex-direction: column;
       gap: 4px;
     }
+    
+    /* STYLE OPTIONS ET VOTES DANS LA CONSOLE ANIMATEUR */
     .animator-option-item {
       font-size: 0.8rem;
-      padding: 6px 8px;
+      padding: 6px 10px;
       border-radius: 6px;
       background: #f0f4f8;
       border: 1px solid #d0d7de;
       transition: all 0.3s ease;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
     }
     .animator-option-item.correct-answer {
       background: var(--success) !important;
       color: #ffffff !important;
       font-weight: bold;
       border-color: var(--success) !important;
+    }
+
+    .animator-vote-count {
+      background: rgba(0, 0, 0, 0.08);
+      color: var(--dark);
+      font-weight: bold;
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 12px;
+      white-space: nowrap;
+    }
+    .animator-option-item.correct-answer .animator-vote-count {
+      background: rgba(255, 255, 255, 0.3);
+      color: #ffffff;
     }
 
     /* --- PISTE DE COURSE --- */
@@ -1089,15 +1109,30 @@
 
       const allHaveAnswered = (totalConnected > 0 && totalAnswers >= totalConnected);
 
+      // Calcul des votes par réponse si tout le monde a répondu
+      const voteCounts = {};
+      if (allHaveAnswered) {
+        entries.forEach(([_, j]) => {
+          if (j.lastAnswer !== undefined) {
+            voteCounts[j.lastAnswer] = (voteCounts[j.lastAnswer] || 0) + 1;
+          }
+        });
+      }
+
       currentQ.options.forEach((opt, idx) => {
         const li = document.createElement('li');
         li.className = 'animator-option-item';
 
+        const count = voteCounts[idx] || 0;
+        const countBadge = allHaveAnswered 
+          ? `<span class="animator-vote-count">${count} vote${count > 1 ? 's' : ''}</span>` 
+          : '';
+
         if (allHaveAnswered && idx === currentQ.correct) {
           li.classList.add('correct-answer');
-          li.innerText = `✓ ${opt} (Bonne réponse)`;
+          li.innerHTML = `<span>✓ ${opt} (Bonne réponse)</span> ${countBadge}`;
         } else {
-          li.innerText = opt;
+          li.innerHTML = `<span>${opt}</span> ${countBadge}`;
         }
 
         optionsList.appendChild(li);
@@ -1116,7 +1151,10 @@
     db.ref(`courses/${currentSessionId}/joueurs`).once('value', snap => {
       const joueurs = snap.val() || {};
       Object.keys(joueurs).forEach(pKey => {
-        db.ref(`courses/${currentSessionId}/joueurs/${pKey}/hasAnswered`).set(false);
+        db.ref(`courses/${currentSessionId}/joueurs/${pKey}`).update({
+          hasAnswered: false,
+          lastAnswer: null
+        });
       });
 
       const newModifiers = calculateAndAssignModifiers(joueurs);
@@ -1138,7 +1176,10 @@
     db.ref(`courses/${currentSessionId}/joueurs`).once('value', snap => {
       const joueurs = snap.val() || {};
       Object.keys(joueurs).forEach(pKey => {
-        db.ref(`courses/${currentSessionId}/joueurs/${pKey}/hasAnswered`).set(false);
+        db.ref(`courses/${currentSessionId}/joueurs/${pKey}`).update({
+          hasAnswered: false,
+          lastAnswer: null
+        });
       });
 
       if (nextQ >= QUESTIONS.length) {
@@ -1274,7 +1315,11 @@
 
     const feedbackEl = document.getElementById('feedback-msg');
 
-    db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ hasAnswered: true });
+    // Enregistrer l'état de réponse ET l'option choisie
+    db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ 
+      hasAnswered: true,
+      lastAnswer: chosenIdx 
+    });
     db.ref(`courses/${currentSessionId}/answersCount`).transaction(count => (count || 0) + 1);
 
     const activeModifiers = sessionData.activeModifiers || {};
