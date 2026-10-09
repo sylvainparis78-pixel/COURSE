@@ -22,7 +22,93 @@
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background-color: var(--light); color: var(--dark); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 10px; overflow-x: hidden; }
+    
+    body { 
+      background-color: #0f172a; 
+      color: var(--dark); 
+      min-height: 100vh; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      padding: 10px; 
+      overflow-x: hidden; 
+      position: relative;
+    }
+
+    /* ANIMATION DE FOND D'ÉCRAN */
+    .bg-animated-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: -1;
+      pointer-events: none;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 30%, #1e293b 0%, #0f172a 80%);
+    }
+
+    .bg-moving-stripes {
+      position: absolute;
+      width: 200%;
+      height: 200%;
+      top: -50%;
+      left: -50%;
+      background-image: repeating-linear-gradient(
+        -45deg,
+        rgba(255, 255, 255, 0.03) 0,
+        rgba(255, 255, 255, 0.03) 35px,
+        transparent 35px,
+        transparent 70px
+      );
+      animation: stripeShift 20s linear infinite;
+    }
+
+    @keyframes stripeShift {
+      0% { transform: translate(0, 0); }
+      100% { transform: translate(70px, 70px); }
+    }
+
+    .bg-orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.45;
+      animation: floatOrb 12s ease-in-out infinite alternate;
+    }
+
+    .bg-orb-1 {
+      width: 380px;
+      height: 380px;
+      background: #2E6CA4;
+      top: 10%;
+      left: 10%;
+      animation-duration: 10s;
+    }
+
+    .bg-orb-2 {
+      width: 420px;
+      height: 420px;
+      background: #ff9800;
+      bottom: 10%;
+      right: 10%;
+      animation-duration: 14s;
+    }
+
+    .bg-orb-3 {
+      width: 320px;
+      height: 320px;
+      background: #28a745;
+      top: 45%;
+      left: 45%;
+      animation-duration: 18s;
+    }
+
+    @keyframes floatOrb {
+      0% { transform: translate(0, 0) scale(1); }
+      50% { transform: translate(50px, -40px) scale(1.15); }
+      100% { transform: translate(-40px, 50px) scale(0.85); }
+    }
 
     .app-container {
       width: 100%;
@@ -620,6 +706,14 @@
   </style>
 </head>
 <body>
+
+<!-- ARRIÈRE-PLAN ANIMÉ -->
+<div class="bg-animated-container">
+  <div class="bg-moving-stripes"></div>
+  <div class="bg-orb bg-orb-1"></div>
+  <div class="bg-orb bg-orb-2"></div>
+  <div class="bg-orb bg-orb-3"></div>
+</div>
 
 <div class="app-container" id="main-container">
 
