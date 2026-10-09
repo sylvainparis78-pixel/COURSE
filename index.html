@@ -171,12 +171,13 @@
       padding: 3px 10px;
       border-radius: 10px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      white-space: nowrap;
     }
 
-    /* NOM DU JOUEUR (DROITE) */
+    /* NOM DU JOUEUR (DROITE - Positionné à gauche du badge de score) */
     .lane-v2 .player-tag-right {
       position: absolute;
-      right: 60px;
+      right: 110px;
       z-index: 2;
       color: #1e1e24;
       font-size: 0.85rem;
@@ -185,6 +186,7 @@
       padding: 3px 10px;
       border-radius: 10px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      white-space: nowrap;
     }
 
     .lane-v2 .finish-line {
@@ -320,6 +322,7 @@
       padding: 2px 8px;
       border-radius: 8px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      z-index: 2;
     }
 
     .player-profile-header {
@@ -374,7 +377,6 @@
     .btn-answer-mobile.correct { background-color: var(--success) !important; color: white; border-color: var(--success); }
     .btn-answer-mobile.wrong { background-color: var(--danger) !important; color: white; border-color: var(--danger); }
 
-    /* STYLES BADGES D'ÉTAT DE RÉPONSE DANS LA CONSOLE ANIMATEUR */
     .player-badge {
       display: inline-flex;
       align-items: center;
@@ -413,7 +415,6 @@
     }
     .btn-delete-player:hover { opacity: 0.8; }
 
-    /* --- STYLES PODIUM ENGAGEANT ET CHALEUREUX --- */
     .podium-container {
       display: flex;
       justify-content: center;
@@ -506,7 +507,6 @@
       margin-top: 4px;
     }
 
-    /* STYLES CLASSEMENT ANIMATEUR ET REVISION */
     .leaderboard-list {
       margin-top: 15px;
       display: flex;
@@ -695,7 +695,6 @@
         </button>
       </div>
 
-      <!-- PANEL PODIUM (ENGAGEANT ET CHALEUREUX) -->
       <div id="podium-panel" style="display:none; margin-top:20px; animation: fadeIn 0.5s ease-in;">
         <h3 style="color:var(--primary); font-size:1.3rem;">🎉 Le Podium des Champions 🎉</h3>
         <div id="podium-display" class="podium-container"></div>
@@ -850,7 +849,6 @@
     });
   }
 
-  // GESTION DU BOUTON DES MODIFICATEURS
   function toggleModifiers() {
     if (!currentSessionId || !isAnimator) return;
     const newState = !sessionData.modifiersEnabled;
@@ -859,7 +857,6 @@
     });
   }
 
-  // GÉNÉRATION DES MODIFICATEURS (BONUS & MALUS)
   function calculateAndAssignModifiers(joueursObj) {
     if (!sessionData.modifiersEnabled) return {};
 
