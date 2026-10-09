@@ -708,7 +708,7 @@
   <div id="screen-player" class="screen">
     <div class="player-profile-header">
       <div style="display:flex; align-items:center; gap:10px;">
-        <img id="player-card-avatar" src="" class="player-profile-avatar" alt="Avatar">
+        <img id="player-card-avatar" src="" class="player-profile-avatar" alt="Avatar" onerror="this.style.display='none'">
         <div>
           <div style="font-size:0.75rem; color:#666;">Équipe :</div>
           <div id="player-card-name" class="player-profile-name">-</div>
@@ -1352,6 +1352,21 @@
       return;
     }
 
+    // MISE À JOUR DYNAMIQUE PSEUDO ET AVATAR DANS L'EN-TÊTE DU JOUEUR
+    if (sessionData.joueurs && sessionData.joueurs[playerId]) {
+      const currentPlayer = sessionData.joueurs[playerId];
+      const avatarInfo = AVATARS.find(a => a.id === currentPlayer.avatar) || AVATARS[0];
+      
+      const nameEl = document.getElementById('player-card-name');
+      const avatarEl = document.getElementById('player-card-avatar');
+      
+      if (nameEl) nameEl.innerText = currentPlayer.name || '-';
+      if (avatarEl) {
+        avatarEl.src = avatarInfo.img;
+        avatarEl.style.display = 'block';
+      }
+    }
+
     document.getElementById('player-wait-screen').style.display = 'none';
     document.getElementById('player-question-zone').style.display = 'flex';
 
@@ -1725,8 +1740,15 @@
         selectedAvatarId = myPlayerData.avatar;
 
         const avatarInfo = AVATARS.find(a => a.id === myPlayerData.avatar) || AVATARS[0];
-        document.getElementById('player-card-name').innerText = myPlayerData.name;
-        document.getElementById('player-card-avatar').src = avatarInfo.img;
+        
+        const nameEl = document.getElementById('player-card-name');
+        const avatarEl = document.getElementById('player-card-avatar');
+        
+        if (nameEl) nameEl.innerText = myPlayerData.name || '-';
+        if (avatarEl) {
+          avatarEl.src = avatarInfo.img;
+          avatarEl.style.display = 'block';
+        }
 
         listenToCourse();
         showScreen('screen-player');
