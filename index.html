@@ -159,9 +159,24 @@
     .lane-v2.lane-color-4 { background-color: #D4A5FF; border: 2px solid #BB80FF; }
     .lane-v2.lane-color-5 { background-color: #BAE1FF; border: 2px solid #84C5FF; }
 
+    /* NOM DU JOUEUR (GAUCHE) */
     .lane-v2 .player-tag {
       position: absolute;
       left: 12px;
+      z-index: 2;
+      color: #1e1e24;
+      font-size: 0.85rem;
+      font-weight: bold;
+      background: rgba(255, 255, 255, 0.85);
+      padding: 3px 10px;
+      border-radius: 10px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    /* NOM DU JOUEUR (DROITE) */
+    .lane-v2 .player-tag-right {
+      position: absolute;
+      right: 60px;
       z-index: 2;
       color: #1e1e24;
       font-size: 0.85rem;
@@ -851,34 +866,27 @@
     const entries = Object.entries(joueursObj);
     if (entries.length === 0) return {};
 
-    // Calcul des scores uniques triés par ordre décroissant
     const scores = Array.from(new Set(entries.map(([_, j]) => j.position || 0))).sort((a, b) => b - a);
     const topScore = scores[0];
     const secondScore = scores.length > 1 ? scores[1] : null;
 
-    // 1ers de la course
     const leaders = entries.filter(([_, j]) => (j.position || 0) === topScore).map(([pKey]) => pKey);
-    // 2es de la course
     const secondPlace = secondScore !== null 
       ? entries.filter(([_, j]) => (j.position || 0) === secondScore).map(([pKey]) => pKey) 
       : [];
 
     const nonLeaders = entries.filter(([pKey]) => !leaders.includes(pKey)).map(([pKey]) => pKey);
-    
-    // Candidats éligibles au malus : 1ers + 2es
     const malusCandidates = Array.from(new Set([...leaders, ...secondPlace]));
 
     const modifiers = {};
 
-    // 1. Affecter le Malus (Peau de Banane 🍌) : 1er, 2e, ou aucun
     let bananaTarget = null;
-    const bananaRoll = Math.random(); // 33% chance d'aucun, ou cibler un joueur éligible
+    const bananaRoll = Math.random(); 
     if (bananaRoll > 0.33 && malusCandidates.length > 0) {
       bananaTarget = malusCandidates[Math.floor(Math.random() * malusCandidates.length)];
       modifiers[bananaTarget] = 'banana';
     }
 
-    // 2. Affecter le Bonus (Champignon 🍄) : Tous sauf le 1er (et pas la cible de la banane)
     const bonusCandidates = nonLeaders.filter(pKey => pKey !== bananaTarget);
     if (bonusCandidates.length > 0) {
       const mushroomTarget = bonusCandidates[Math.floor(Math.random() * bonusCandidates.length)];
@@ -1035,7 +1043,6 @@
 
     document.getElementById('count-connected').innerText = entries.length;
 
-    // Mise à jour du bouton Modificateurs
     const btnModifiers = document.getElementById('btn-toggle-modifiers');
     if (sessionData.modifiersEnabled) {
       btnModifiers.className = "btn btn-info btn-small";
@@ -1186,7 +1193,6 @@
         rocketHtml = `<span class="fastest-rocket" style="left: calc(${progressPct}% + 45px);">🚀</span>`;
       }
 
-      // Gestion des modificateurs visuels (Champignon & Peau de banane)
       let modifierHtml = '';
       const pModifier = activeModifiers ? activeModifiers[pKey] : null;
       if (pModifier === 'mushroom') {
@@ -1199,6 +1205,7 @@
 
       lane.innerHTML = `
         <span class="player-tag">${jData.name}</span>
+        <span class="player-tag-right">${jData.name}</span>
         ${modifierHtml}
         ${smokeHtml}
         <img src="${avatarInfo.img}" class="runner-avatar ${isLeader ? 'leader-halo' : ''} ${isSlipping}" style="left: ${progressPct}%;" onerror="this.src='https://via.placeholder.com/44?text=X'">
@@ -1266,7 +1273,6 @@
 
     const feedbackEl = document.getElementById('feedback-msg');
 
-    // Mettre à jour l'état de réponse du joueur dans Firebase
     db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ hasAnswered: true });
     db.ref(`courses/${currentSessionId}/answersCount`).transaction(count => (count || 0) + 1);
 
@@ -1290,7 +1296,6 @@
       bonusText = `❌ Mauvaise réponse. (+0 pt)`;
     }
 
-    // Appliquer le bonus / malus
     if (playerModifier === 'mushroom') {
       deltaPoints += 1;
       bonusText += ` <br>🍄 **Bonus Champignon : +1 pt supplémentaire !**`;
@@ -1298,7 +1303,6 @@
       deltaPoints -= 1;
       bonusText += ` <br>🍌 **Oups ! Glissade sur une peau de banane : -1 pt !**`;
       
-      // Activer l'animation de glissade 360°
       db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isSlipping: true });
       setTimeout(() => {
         db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isSlipping: false });
