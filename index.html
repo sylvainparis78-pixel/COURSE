@@ -111,7 +111,6 @@
       gap: 4px;
     }
     
-    /* STYLE OPTIONS ET VOTES DANS LA CONSOLE ANIMATEUR */
     .animator-option-item {
       font-size: 0.8rem;
       padding: 6px 10px;
@@ -179,7 +178,6 @@
     .lane-v2.lane-color-4 { background-color: #D4A5FF; border: 2px solid #BB80FF; }
     .lane-v2.lane-color-5 { background-color: #BAE1FF; border: 2px solid #84C5FF; }
 
-    /* NOM DU JOUEUR (GAUCHE & CENTRÉ VERTICALEMENT) */
     .lane-v2 .player-tag {
       position: absolute;
       left: 12px;
@@ -196,7 +194,6 @@
       white-space: nowrap;
     }
 
-    /* NOM DU JOUEUR (CENTRE DE LA PISTE) */
     .lane-v2 .player-tag-center {
       position: absolute;
       left: 50%;
@@ -253,13 +250,26 @@
       to   { transform: translateY(-4px) scale(1.08); filter: drop-shadow(0 0 16px #FFF700) drop-shadow(0 0 25px #FF4500); }
     }
 
-    /* ANIMATIONS BONUS & MALUS */
+    /* ANIMATIONS BONUS & MALUS & EXPLOSION */
     .modifier-badge {
       position: absolute;
       z-index: 4;
       font-size: 1.4rem;
       pointer-events: none;
       transition: left 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .risk-badge {
+      position: absolute;
+      z-index: 4;
+      font-size: 1.2rem;
+      pointer-events: none;
+      transition: left 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+      animation: pulseRisk 0.6s infinite alternate;
+    }
+    @keyframes pulseRisk {
+      from { transform: scale(0.9); }
+      to { transform: scale(1.2); }
     }
 
     .mushroom-boost {
@@ -292,6 +302,20 @@
       30%  { transform: translateY(-12px) rotate(-180deg) scale(1.15); }
       70%  { transform: translateY(-5px) rotate(-360deg) scale(1.1); }
       100% { transform: translateY(0) rotate(-360deg) scale(1); }
+    }
+
+    /* ANIMATION EXPLOSION ÉCHEC QUITTE OU DOUBLE */
+    .exploding {
+      animation: explodeAnim 1.2s ease-out forwards !important;
+    }
+
+    @keyframes explodeAnim {
+      0% { transform: scale(1) rotate(0deg); filter: contrast(100%); }
+      20% { transform: scale(1.4) rotate(-10deg); filter: drop-shadow(0 0 15px #dc3545) brightness(1.5); }
+      40% { transform: scale(0.8) rotate(15deg); opacity: 0.8; }
+      60% { transform: scale(1.2) rotate(-5deg); filter: sepia(100%) hue-rotate(-50deg) saturate(600%); }
+      80% { transform: scale(0.9) rotate(5deg); opacity: 0.9; }
+      100% { transform: scale(1) rotate(0deg); filter: none; }
     }
 
     .smoke-container {
@@ -400,6 +424,15 @@
     .btn-answer-mobile:active { transform: scale(0.98); }
     .btn-answer-mobile.correct { background-color: var(--success) !important; color: white; border-color: var(--success); }
     .btn-answer-mobile.wrong { background-color: var(--danger) !important; color: white; border-color: var(--danger); }
+
+    .risk-choice-card {
+      background: #fff3cd;
+      border: 2px dashed #ffc107;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+      text-align: center;
+    }
 
     .player-badge {
       display: inline-flex;
@@ -639,8 +672,12 @@
         <div>
           <h2>Console Animateur</h2>
           
-          <button id="btn-toggle-modifiers" class="btn btn-secondary btn-small" style="width:100%; margin:8px 0; font-weight:bold;" onclick="toggleModifiers()">
+          <button id="btn-toggle-modifiers" class="btn btn-secondary btn-small" style="width:100%; margin:4px 0; font-weight:bold;" onclick="toggleModifiers()">
             🍄 Modificateurs (Bonus/Malus) : OFF
+          </button>
+          
+          <button id="btn-toggle-risk" class="btn btn-secondary btn-small" style="width:100%; margin:4px 0; font-weight:bold;" onclick="toggleDoubleRisk()">
+            🎲 Quitte ou Double : OFF
           </button>
 
           <div style="margin: 8px 0; font-size:0.85rem;">
@@ -696,6 +733,15 @@
         <p id="q-text" style="font-size:1.05rem; margin-top:6px; font-weight:600;"></p>
       </div>
 
+      <!-- SÉLECTEUR QUITTE OU DOUBLE SUR MOBILE -->
+      <div id="risk-selector-zone" class="risk-choice-card" style="display:none;">
+        <div style="font-weight:bold; font-size:0.9rem; color:#856404; margin-bottom:8px;">🎲 QUESTION QUITTE OU DOUBLE !</div>
+        <div style="display:flex; gap:8px;">
+          <button id="btn-risk-off" class="btn btn-small btn-secondary" style="flex:1;" onclick="setPlayerRisk(false)">🛡️ Sécurité (+1 / 0)</button>
+          <button id="btn-risk-on" class="btn btn-small btn-warning" style="flex:1;" onclick="setPlayerRisk(true)">🎲 Risque (+3 / -2)</button>
+        </div>
+      </div>
+
       <div class="answers-grid-mobile" id="answers-container"></div>
       <div id="feedback-msg" style="margin-top:10px; font-weight:bold; text-align:center; font-size:1.05rem;"></div>
     </div>
@@ -712,7 +758,7 @@
           🥇 Afficher le Podium
         </button>
         <button id="btn-show-leaderboard" class="btn btn-warning" style="display:none; max-width:280px; margin:0;" onclick="toggleLeaderboard()">
-          📊 Afficher le Classement Complet
+          📊 Afficher le Classement Complete
         </button>
         <button id="btn-show-review" class="btn btn-warning" style="display:none; max-width:280px; margin:0;" onclick="toggleReview()">
           🔍 Revoir toutes les questions
@@ -787,6 +833,7 @@
   let sessionData = {};
   let hasAnsweredCurrentQuestion = false;
   let reviewQuestionIndex = 0;
+  let playerRiskChoice = false;
 
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -864,6 +911,7 @@
       answersCount: 0,
       questions: QUESTIONS,
       modifiersEnabled: false,
+      isDoubleRisk: false,
       activeModifiers: {}
     }).then(() => {
       listenToCourse();
@@ -878,6 +926,14 @@
     const newState = !sessionData.modifiersEnabled;
     db.ref(`courses/${currentSessionId}`).update({
       modifiersEnabled: newState
+    });
+  }
+
+  function toggleDoubleRisk() {
+    if (!currentSessionId || !isAnimator) return;
+    const newState = !sessionData.isDoubleRisk;
+    db.ref(`courses/${currentSessionId}`).update({
+      isDoubleRisk: newState
     });
   }
 
@@ -1001,7 +1057,8 @@
         name: name,
         avatar: selectedAvatarId,
         position: 0,
-        hasAnswered: false
+        hasAnswered: false,
+        riskTaken: false
       };
 
       return joueurs;
@@ -1073,6 +1130,15 @@
       btnModifiers.innerText = "🍄 Modificateurs (Bonus/Malus) : OFF";
     }
 
+    const btnRisk = document.getElementById('btn-toggle-risk');
+    if (sessionData.isDoubleRisk) {
+      btnRisk.className = "btn btn-warning btn-small";
+      btnRisk.innerText = "🎲 Quitte ou Double : ON";
+    } else {
+      btnRisk.className = "btn btn-secondary btn-small";
+      btnRisk.innerText = "🎲 Quitte ou Double : OFF";
+    }
+
     listEl.innerHTML = entries.map(([pKey, j]) => {
       const isAnswered = j.hasAnswered === true;
       const statusClass = isAnswered ? 'status-answered' : 'status-waiting';
@@ -1102,14 +1168,14 @@
       qBox.style.display = 'block';
 
       const currentQ = QUESTIONS[qIndex];
-      document.getElementById('animator-q-title').innerText = `${qIndex + 1}. ${currentQ.text}`;
+      const riskPrefix = sessionData.isDoubleRisk ? "🎲 [QUITTE OU DOUBLE] " : "";
+      document.getElementById('animator-q-title').innerText = `${riskPrefix}${qIndex + 1}. ${currentQ.text}`;
 
       const optionsList = document.getElementById('animator-options-list');
       optionsList.innerHTML = '';
 
       const allHaveAnswered = (totalConnected > 0 && totalAnswers >= totalConnected);
 
-      // Calcul des votes par réponse si tout le monde a répondu
       const voteCounts = {};
       if (allHaveAnswered) {
         entries.forEach(([_, j]) => {
@@ -1153,7 +1219,9 @@
       Object.keys(joueurs).forEach(pKey => {
         db.ref(`courses/${currentSessionId}/joueurs/${pKey}`).update({
           hasAnswered: false,
-          lastAnswer: null
+          lastAnswer: null,
+          riskTaken: false,
+          isExploding: false
         });
       });
 
@@ -1178,7 +1246,9 @@
       Object.keys(joueurs).forEach(pKey => {
         db.ref(`courses/${currentSessionId}/joueurs/${pKey}`).update({
           hasAnswered: false,
-          lastAnswer: null
+          lastAnswer: null,
+          riskTaken: false,
+          isExploding: false
         });
       });
 
@@ -1243,14 +1313,21 @@
         modifierHtml = `<span class="modifier-badge banana-trap" style="left: calc(${progressPct}% - 35px);">🍌</span>`;
       }
 
+      let riskHtml = '';
+      if (jData.riskTaken) {
+        riskHtml = `<span class="risk-badge" style="left: calc(${progressPct}% + 40px);">🎲</span>`;
+      }
+
       const isSlipping = jData.isSlipping ? 'slip-spin' : '';
+      const isExploding = jData.isExploding ? 'exploding' : '';
 
       lane.innerHTML = `
         <span class="player-tag">${jData.name}</span>
         <span class="player-tag-center">${jData.name}</span>
         ${modifierHtml}
+        ${riskHtml}
         ${smokeHtml}
-        <img src="${avatarInfo.img}" class="runner-avatar ${isLeader ? 'leader-halo' : ''} ${isSlipping}" style="left: ${progressPct}%;" onerror="this.src='https://via.placeholder.com/44?text=X'">
+        <img src="${avatarInfo.img}" class="runner-avatar ${isLeader ? 'leader-halo' : ''} ${isSlipping} ${isExploding}" style="left: ${progressPct}%;" onerror="this.src='https://via.placeholder.com/44?text=X'">
         ${rocketHtml}
         <span class="score-badge">${jData.position} pts</span>
         <div class="finish-line"></div>
@@ -1261,6 +1338,12 @@
   }
 
   // 6. INTERFACE MOBILES
+  function setPlayerRisk(isRisk) {
+    playerRiskChoice = isRisk;
+    document.getElementById('btn-risk-off').className = isRisk ? "btn btn-small btn-secondary" : "btn btn-small btn-warning";
+    document.getElementById('btn-risk-on').className = isRisk ? "btn btn-small btn-danger" : "btn btn-small btn-secondary";
+  }
+
   function updatePlayerUI() {
     const qIndex = sessionData.currentQuestion;
     if (qIndex === undefined || qIndex < 0 || !QUESTIONS || QUESTIONS.length === 0 || qIndex >= QUESTIONS.length) {
@@ -1277,10 +1360,20 @@
     document.getElementById('q-title').innerText = `Question ${qIndex + 1}`;
     document.getElementById('q-text').innerText = q.text;
 
+    const riskZone = document.getElementById('risk-selector-zone');
+    if (sessionData.isDoubleRisk) {
+      riskZone.style.display = 'block';
+    } else {
+      riskZone.style.display = 'none';
+      playerRiskChoice = false;
+    }
+
     const container = document.getElementById('answers-container');
 
     if (container.dataset.qIndex != qIndex) {
       hasAnsweredCurrentQuestion = false;
+      playerRiskChoice = false;
+      setPlayerRisk(false);
       container.dataset.qIndex = qIndex;
       document.getElementById('feedback-msg').innerText = '';
       container.innerHTML = '';
@@ -1315,10 +1408,10 @@
 
     const feedbackEl = document.getElementById('feedback-msg');
 
-    // Enregistrer l'état de réponse ET l'option choisie
     db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ 
       hasAnswered: true,
-      lastAnswer: chosenIdx 
+      lastAnswer: chosenIdx,
+      riskTaken: playerRiskChoice
     });
     db.ref(`courses/${currentSessionId}/answersCount`).transaction(count => (count || 0) + 1);
 
@@ -1328,18 +1421,32 @@
     let deltaPoints = 0;
     let bonusText = "";
 
-    if (isCorrect) {
-      const isFirst = !sessionData.firstCorrectPlayer;
-      deltaPoints = isFirst ? 2 : 1;
-
-      if (isFirst) {
-        db.ref(`courses/${currentSessionId}/firstCorrectPlayer`).set(playerId);
-        bonusText = `🚀 Bonne réponse ! (+2 pts le plus rapide)`;
+    if (sessionData.isDoubleRisk && playerRiskChoice) {
+      if (isCorrect) {
+        deltaPoints = 3;
+        bonusText = `💥 **QUITTE OU DOUBLE RÉUSSI ! (+3 pts)**`;
       } else {
-        bonusText = `✅ Bonne réponse ! (+1 pt)`;
+        deltaPoints = -2;
+        bonusText = `💥 **BOOM ! ÉCHEC QUITTE OU DOUBLE ! (-2 pts)**`;
+        db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isExploding: true });
+        setTimeout(() => {
+          db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isExploding: false });
+        }, 1200);
       }
     } else {
-      bonusText = `❌ Mauvaise réponse. (+0 pt)`;
+      if (isCorrect) {
+        const isFirst = !sessionData.firstCorrectPlayer;
+        deltaPoints = isFirst ? 2 : 1;
+
+        if (isFirst) {
+          db.ref(`courses/${currentSessionId}/firstCorrectPlayer`).set(playerId);
+          bonusText = `🚀 Bonne réponse ! (+2 pts le plus rapide)`;
+        } else {
+          bonusText = `✅ Bonne réponse ! (+1 pt)`;
+        }
+      } else {
+        bonusText = `❌ Mauvaise réponse. (+0 pt)`;
+      }
     }
 
     if (playerModifier === 'mushroom') {
