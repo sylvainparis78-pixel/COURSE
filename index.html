@@ -159,10 +159,12 @@
     .lane-v2.lane-color-4 { background-color: #D4A5FF; border: 2px solid #BB80FF; }
     .lane-v2.lane-color-5 { background-color: #BAE1FF; border: 2px solid #84C5FF; }
 
-    /* NOM DU JOUEUR (GAUCHE) */
+    /* NOM DU JOUEUR (GAUCHE & CENTRÉ VERTICALEMENT) */
     .lane-v2 .player-tag {
       position: absolute;
       left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
       z-index: 2;
       color: #1e1e24;
       font-size: 0.85rem;
@@ -174,10 +176,12 @@
       white-space: nowrap;
     }
 
-    /* NOM DU JOUEUR (DROITE - Positionné à gauche du badge de score) */
-    .lane-v2 .player-tag-right {
+    /* NOM DU JOUEUR (CENTRE DE LA PISTE) */
+    .lane-v2 .player-tag-center {
       position: absolute;
-      right: 110px;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
       z-index: 2;
       color: #1e1e24;
       font-size: 0.85rem;
@@ -1202,7 +1206,7 @@
 
       lane.innerHTML = `
         <span class="player-tag">${jData.name}</span>
-        <span class="player-tag-right">${jData.name}</span>
+        <span class="player-tag-center">${jData.name}</span>
         ${modifierHtml}
         ${smokeHtml}
         <img src="${avatarInfo.img}" class="runner-avatar ${isLeader ? 'leader-halo' : ''} ${isSlipping}" style="left: ${progressPct}%;" onerror="this.src='https://via.placeholder.com/44?text=X'">
