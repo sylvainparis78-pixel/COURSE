@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>La Course des Mascottes</title>
 
+  <!-- Firebase SDK Compat -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
@@ -73,6 +74,7 @@
     .btn:hover { opacity: 0.9; }
     .btn-secondary { background-color: #6c757d; }
     .btn-warning { background-color: var(--accent); color: #000; }
+    .btn-danger { background-color: var(--danger); color: white; }
     .btn-info { background-color: #17a2b8; color: white; }
     .btn-small { padding: 6px 12px; font-size: 0.8rem; width: auto; margin: 0; }
 
@@ -144,7 +146,7 @@
       color: #ffffff;
     }
 
-    /* --- PISTE DE COURSE --- */
+    /* PISTE DE COURSE */
     .race-track-v2 {
       background: #1e293b;
       border: 3px solid #0f172a;
@@ -250,7 +252,7 @@
       to   { transform: translateY(-4px) scale(1.08); filter: drop-shadow(0 0 16px #FFF700) drop-shadow(0 0 25px #FF4500); }
     }
 
-    /* ANIMATIONS BONUS & MALUS & EXPLOSION */
+    /* BONUS & MALUS ANIMATIONS */
     .modifier-badge {
       position: absolute;
       z-index: 4;
@@ -292,7 +294,6 @@
       to   { transform: rotate(15deg); }
     }
 
-    /* ANIMATION DE GLISSADE POUR AVATAR */
     .slip-spin {
       animation: slipSpin 0.9s cubic-bezier(0.25, 1, 0.5, 1) !important;
     }
@@ -304,7 +305,6 @@
       100% { transform: translateY(0) rotate(-360deg) scale(1); }
     }
 
-    /* ANIMATION EXPLOSION ÉCHEC QUITTE OU DOUBLE */
     .exploding {
       animation: explodeAnim 1.2s ease-out forwards !important;
     }
@@ -629,6 +629,7 @@
     <img src="logo-sylp.jpg" alt="Logo SYLP" class="header-logo-img" onerror="this.style.display='none'">
   </div>
 
+  <!-- ÉCRAN D'ACCUEIL -->
   <div id="screen-welcome" class="screen active">
     <h1>Rejoindre la Partie</h1>
 
@@ -661,6 +662,7 @@
     </div>
   </div>
 
+  <!-- ÉCRAN ANIMATEUR -->
   <div id="screen-animator" class="screen" style="height: 100%;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
       <span id="animator-session-id" style="font-weight:bold; color:var(--primary); font-size:1.1rem;">CODE: ----</span>
@@ -705,6 +707,7 @@
     </div>
   </div>
 
+  <!-- ÉCRAN JOUEUR MOBILE -->
   <div id="screen-player" class="screen">
     <div class="player-profile-header">
       <div style="display:flex; align-items:center; gap:10px;">
@@ -733,7 +736,7 @@
         <p id="q-text" style="font-size:1.05rem; margin-top:6px; font-weight:600;"></p>
       </div>
 
-      <!-- SÉLECTEUR QUITTE OU DOUBLE SUR MOBILE -->
+      <!-- SÉLECTEUR QUITTE OU DOUBLE -->
       <div id="risk-selector-zone" class="risk-choice-card" style="display:none;">
         <div style="font-weight:bold; font-size:0.9rem; color:#856404; margin-bottom:8px;">🎲 QUESTION QUITTE OU DOUBLE !</div>
         <div style="display:flex; gap:8px;">
@@ -747,6 +750,7 @@
     </div>
   </div>
 
+  <!-- ÉCRAN FIN / PODIUM -->
   <div id="screen-end" class="screen" style="text-align:center;">
     <h1>🏆 Arrivée de la Course !</h1>
 
@@ -758,7 +762,7 @@
           🥇 Afficher le Podium
         </button>
         <button id="btn-show-leaderboard" class="btn btn-warning" style="display:none; max-width:280px; margin:0;" onclick="toggleLeaderboard()">
-          📊 Afficher le Classement Complete
+          📊 Afficher le Classement Complet
         </button>
         <button id="btn-show-review" class="btn btn-warning" style="display:none; max-width:280px; margin:0;" onclick="toggleReview()">
           🔍 Revoir toutes les questions
@@ -809,6 +813,17 @@
 
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
+
+  // FONCTION SÉCURISÉE DE VIBRATION (AVEC FALLBACK iOS/DESKTOP GARANTI)
+  function triggerVibration(pattern) {
+    try {
+      if ("vibrate" in navigator && typeof navigator.vibrate === "function") {
+        navigator.vibrate(pattern);
+      }
+    } catch (e) {
+      console.warn("Vibration non supportée sur cet appareil ou bloquée par le navigateur.", e);
+    }
+  }
 
   const AVATARS = [
     { id: 'grenouille', name: 'Grenouille', img: 'grenouille.png' },
@@ -1179,7 +1194,7 @@
       const voteCounts = {};
       if (allHaveAnswered) {
         entries.forEach(([_, j]) => {
-          if (j.lastAnswer !== undefined) {
+          if (j.lastAnswer !== undefined && j.lastAnswer !== null) {
             voteCounts[j.lastAnswer] = (voteCounts[j.lastAnswer] || 0) + 1;
           }
         });
@@ -1352,7 +1367,7 @@
       return;
     }
 
-    // MISE À JOUR DYNAMIQUE PSEUDO ET AVATAR DANS L'EN-TÊTE DU JOUEUR
+    // DYNAMICAL UPDATE PSEUDO & AVATAR HEADER
     if (sessionData.joueurs && sessionData.joueurs[playerId]) {
       const currentPlayer = sessionData.joueurs[playerId];
       const avatarInfo = AVATARS.find(a => a.id === currentPlayer.avatar) || AVATARS[0];
@@ -1436,6 +1451,13 @@
     let deltaPoints = 0;
     let bonusText = "";
 
+    // VIBRATIONS PATTERNS DECLARATION
+    const VIB_LONG_DOUBLE = [300, 100, 300]; // Peau de banane / Échec Quitte ou Double
+    const VIB_FAST_SINGLE = 400;              // Le plus rapide / Champignon
+
+    let shouldTriggerFastVib = false;
+    let shouldTriggerDoubleLongVib = false;
+
     if (sessionData.isDoubleRisk && playerRiskChoice) {
       if (isCorrect) {
         deltaPoints = 3;
@@ -1443,6 +1465,8 @@
       } else {
         deltaPoints = -2;
         bonusText = `💥 **BOOM ! ÉCHEC QUITTE OU DOUBLE ! (-2 pts)**`;
+        shouldTriggerDoubleLongVib = true; // 2 impulsions longues
+
         db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isExploding: true });
         setTimeout(() => {
           db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isExploding: false });
@@ -1456,6 +1480,7 @@
         if (isFirst) {
           db.ref(`courses/${currentSessionId}/firstCorrectPlayer`).set(playerId);
           bonusText = `🚀 Bonne réponse ! (+2 pts le plus rapide)`;
+          shouldTriggerFastVib = true; // Impulsion rapide
         } else {
           bonusText = `✅ Bonne réponse ! (+1 pt)`;
         }
@@ -1467,14 +1492,23 @@
     if (playerModifier === 'mushroom') {
       deltaPoints += 1;
       bonusText += ` <br>🍄 **Bonus Champignon : +1 pt supplémentaire !**`;
+      shouldTriggerFastVib = true; // Impulsion rapide
     } else if (playerModifier === 'banana') {
       deltaPoints -= 1;
       bonusText += ` <br>🍌 **Oups ! Glissade sur une peau de banane : -1 pt !**`;
+      shouldTriggerDoubleLongVib = true; // 2 impulsions longues
       
       db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isSlipping: true });
       setTimeout(() => {
         db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isSlipping: false });
       }, 900);
+    }
+
+    // EXÉCUTION DE LA VIBRATION SELON LES RÈGLES
+    if (shouldTriggerDoubleLongVib) {
+      triggerVibration(VIB_LONG_DOUBLE);
+    } else if (shouldTriggerFastVib) {
+      triggerVibration(VIB_FAST_SINGLE);
     }
 
     feedbackEl.innerHTML = bonusText;
