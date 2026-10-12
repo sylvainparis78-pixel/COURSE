@@ -739,7 +739,7 @@
       <!-- SÉLECTEUR QUITTE OU DOUBLE -->
       <div id="risk-selector-zone" class="risk-choice-card" style="display:none;">
         <div style="font-weight:bold; font-size:0.9rem; color:#856404; margin-bottom:8px;" id="risk-title-text">🎲 QUESTION QUITTE OU DOUBLE ! Choix requis</div>
-        <div style="display:flex; gap:8px;">
+        <div style="display:flex; gap:8px;" id="risk-buttons-container">
           <button id="btn-risk-off" class="btn btn-small btn-secondary" style="flex:1;" onclick="setPlayerRisk(false)">🛡️ Sécurité (+1 / 0)</button>
           <button id="btn-risk-on" class="btn btn-small btn-warning" style="flex:1;" onclick="setPlayerRisk(true)">🎲 Risque (+3 / -2)</button>
         </div>
@@ -1414,11 +1414,13 @@
       if (sessionData.isDoubleRisk) {
         riskZone.style.display = 'block';
         
+        // Rendre les boutons cliquables pendant le décompte
+        document.getElementById('btn-risk-off').disabled = false;
+        document.getElementById('btn-risk-on').disabled = false;
+        
         let timeLeft = 4;
         const riskTitleText = document.getElementById('risk-title-text');
         riskTitleText.innerHTML = `🎲 QUESTION QUITTE OU DOUBLE ! (${timeLeft}s)`;
-
-        // Aucun bouton de réponse n'est créé ici pendant les 4 secondes (les réponses restent totalement cachées)
 
         riskTimerInterval = setInterval(() => {
           timeLeft--;
@@ -1426,9 +1428,16 @@
             riskTitleText.innerHTML = `🎲 QUESTION QUITTE OU DOUBLE ! (${timeLeft}s)`;
           } else {
             clearInterval(riskTimerInterval);
-            riskTitleText.innerHTML = `🎲 QUITTE OU DOUBLE SÉLECTIONNÉ (${playerRiskChoice ? 'Risque' : 'Sécurité'})`;
+            riskTitleText.innerHTML = `🎲 QUITTE OU DOUBLE VERROUILLÉ (${playerRiskChoice ? 'Risque' : 'Sécurité'})`;
             
-            // Une fois les 4 secondes écoulées, on génère et affiche les boutons de réponses
+            // Désactiver les boutons de choix du quitte ou double pour qu'on ne puisse plus modifier son choix
+            document.getElementById('btn-risk-off').disabled = true;
+            document.getElementById('btn-risk-on').disabled = true;
+            
+            // Masquer entièrement le bandeau quitte ou double après le décompte
+            riskZone.style.display = 'none';
+
+            // Afficher et générer les boutons de réponses
             container.innerHTML = '';
             q.options.forEach((opt, idx) => {
               const btn = document.createElement('button');
