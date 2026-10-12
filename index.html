@@ -1407,7 +1407,7 @@
       setPlayerRisk(false);
       container.dataset.qIndex = qIndex;
       document.getElementById('feedback-msg').innerText = '';
-      container.innerHTML = '';
+      container.innerHTML = ''; // Nettoyer les réponses pour ne rien afficher au départ
 
       if (riskTimerInterval) clearInterval(riskTimerInterval);
 
@@ -1418,14 +1418,7 @@
         const riskTitleText = document.getElementById('risk-title-text');
         riskTitleText.innerHTML = `🎲 QUESTION QUITTE OU DOUBLE ! (${timeLeft}s)`;
 
-        // Créer les boutons de réponse mais les masquer temporairement (display: none) pendant les 4 secondes
-        q.options.forEach((opt, idx) => {
-          const btn = document.createElement('button');
-          btn.className = 'btn-answer-mobile';
-          btn.innerText = opt;
-          btn.style.display = 'none'; // Masqué pendant le compte à rebours de choix quitte ou double
-          container.appendChild(btn);
-        });
+        // Aucun bouton de réponse n'est créé ici pendant les 4 secondes (les réponses restent totalement cachées)
 
         riskTimerInterval = setInterval(() => {
           timeLeft--;
@@ -1435,11 +1428,14 @@
             clearInterval(riskTimerInterval);
             riskTitleText.innerHTML = `🎲 QUITTE OU DOUBLE SÉLECTIONNÉ (${playerRiskChoice ? 'Risque' : 'Sécurité'})`;
             
-            // Afficher et activer les boutons de réponse après 4 secondes
-            const answerButtons = container.querySelectorAll('.btn-answer-mobile');
-            answerButtons.forEach((btn, idx) => {
-              btn.style.display = 'block';
+            // Une fois les 4 secondes écoulées, on génère et affiche les boutons de réponses
+            container.innerHTML = '';
+            q.options.forEach((opt, idx) => {
+              const btn = document.createElement('button');
+              btn.className = 'btn-answer-mobile';
+              btn.innerText = opt;
               btn.onclick = () => submitAnswer(idx, q.correct);
+              container.appendChild(btn);
             });
           }
         }, 1000);
@@ -1448,6 +1444,7 @@
         riskZone.style.display = 'none';
         playerRiskChoice = false;
 
+        // Si pas de quitte ou double, on affiche les réponses immédiatement
         q.options.forEach((opt, idx) => {
           const btn = document.createElement('button');
           btn.className = 'btn-answer-mobile';
