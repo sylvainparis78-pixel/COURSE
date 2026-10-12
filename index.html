@@ -949,7 +949,6 @@
   function toggleDoubleRisk() {
     if (!currentSessionId || !isAnimator) return;
     const newState = !sessionData.isDoubleRisk;
-    // Si on active en cours de partie, cela s'appliquera à la question suivante (pendingDoubleRisk)
     db.ref(`courses/${currentSessionId}`).update({
       isDoubleRisk: newState,
       pendingDoubleRisk: newState
@@ -1415,18 +1414,16 @@
       if (sessionData.isDoubleRisk) {
         riskZone.style.display = 'block';
         
-        // Bloquer les réponses pendant le compte à rebours de 4 secondes pour le Quitte ou Double
         let timeLeft = 4;
         const riskTitleText = document.getElementById('risk-title-text');
         riskTitleText.innerHTML = `🎲 QUESTION QUITTE OU DOUBLE ! (${timeLeft}s)`;
 
-        // Remplir les boutons masqués ou désactivés temporairement pour les réponses
+        // Créer les boutons de réponse mais les masquer temporairement (display: none) pendant les 4 secondes
         q.options.forEach((opt, idx) => {
           const btn = document.createElement('button');
           btn.className = 'btn-answer-mobile';
           btn.innerText = opt;
-          btn.disabled = true; // Désactivé pendant les 4 secondes du choix quitte ou double
-          btn.style.opacity = '0.4';
+          btn.style.display = 'none'; // Masqué pendant le compte à rebours de choix quitte ou double
           container.appendChild(btn);
         });
 
@@ -1437,11 +1434,11 @@
           } else {
             clearInterval(riskTimerInterval);
             riskTitleText.innerHTML = `🎲 QUITTE OU DOUBLE SÉLECTIONNÉ (${playerRiskChoice ? 'Risque' : 'Sécurité'})`;
-            // Activer les boutons de réponse après 4 secondes
+            
+            // Afficher et activer les boutons de réponse après 4 secondes
             const answerButtons = container.querySelectorAll('.btn-answer-mobile');
             answerButtons.forEach((btn, idx) => {
-              btn.disabled = false;
-              btn.style.opacity = '1';
+              btn.style.display = 'block';
               btn.onclick = () => submitAnswer(idx, q.correct);
             });
           }
