@@ -1367,15 +1367,7 @@
   }
 
   function updatePlayerUI() {
-    const qIndex = sessionData.currentQuestion;
-    if (qIndex === undefined || qIndex < 0 || !QUESTIONS || QUESTIONS.length === 0 || qIndex >= QUESTIONS.length) {
-      document.getElementById('player-wait-screen').style.display = 'block';
-      document.getElementById('player-question-zone').style.display = 'none';
-      if (riskTimerInterval) clearInterval(riskTimerInterval);
-      return;
-    }
-
-    // DYNAMICAL UPDATE PSEUDO & AVATAR HEADER
+    // CORRECTION DU BUG : Mise à jour du pseudo et de l'avatar dès l'arrivée sur l'écran (même en attente, qIndex = -1)
     if (sessionData.joueurs && sessionData.joueurs[playerId]) {
       const currentPlayer = sessionData.joueurs[playerId];
       const avatarInfo = AVATARS.find(a => a.id === currentPlayer.avatar) || AVATARS[0];
@@ -1388,6 +1380,14 @@
         avatarEl.src = avatarInfo.img;
         avatarEl.style.display = 'block';
       }
+    }
+
+    const qIndex = sessionData.currentQuestion;
+    if (qIndex === undefined || qIndex < 0 || !QUESTIONS || QUESTIONS.length === 0 || qIndex >= QUESTIONS.length) {
+      document.getElementById('player-wait-screen').style.display = 'block';
+      document.getElementById('player-question-zone').style.display = 'none';
+      if (riskTimerInterval) clearInterval(riskTimerInterval);
+      return;
     }
 
     document.getElementById('player-wait-screen').style.display = 'none';
