@@ -738,7 +738,7 @@
 
       <!-- SÉLECTEUR QUITTE OU DOUBLE -->
       <div id="risk-selector-zone" class="risk-choice-card" style="display:none;">
-        <div style="font-weight:bold; font-size:0.9rem; color:#856404; margin-bottom:8px;">🎲 QUESTION QUITTE OU DOUBLE !</div>
+        <div style="font-weight:bold; font-size:0.9rem; color:#856404; margin-bottom:8px;" id="risk-title-text">🎲 QUESTION QUITTE OU DOUBLE ! Choix requis</div>
         <div style="display:flex; gap:8px;">
           <button id="btn-risk-off" class="btn btn-small btn-secondary" style="flex:1;" onclick="setPlayerRisk(false)">🛡️ Sécurité (+1 / 0)</button>
           <button id="btn-risk-on" class="btn btn-small btn-warning" style="flex:1;" onclick="setPlayerRisk(true)">🎲 Risque (+3 / -2)</button>
@@ -849,6 +849,7 @@
   let hasAnsweredCurrentQuestion = false;
   let reviewQuestionIndex = 0;
   let playerRiskChoice = false;
+  let riskTimerInterval = null;
 
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -927,6 +928,7 @@
       questions: QUESTIONS,
       modifiersEnabled: false,
       isDoubleRisk: false,
+      pendingDoubleRisk: false,
       activeModifiers: {}
     }).then(() => {
       listenToCourse();
@@ -947,8 +949,10 @@
   function toggleDoubleRisk() {
     if (!currentSessionId || !isAnimator) return;
     const newState = !sessionData.isDoubleRisk;
+    // Si on active en cours de partie, cela s'appliquera à la question suivante (pendingDoubleRisk)
     db.ref(`courses/${currentSessionId}`).update({
-      isDoubleRisk: newState
+      isDoubleRisk: newState,
+      pendingDoubleRisk: newState
     });
   }
 
@@ -1241,6 +1245,7 @@
       });
 
       const newModifiers = calculateAndAssignModifiers(joueurs);
+      const actualDoubleRisk = sessionData.pendingDoubleRisk || false;
 
       db.ref(`courses/${currentSessionId}`).update({
         status: 'active',
@@ -1248,6 +1253,7 @@
         firstCorrectPlayer: null,
         answersCount: 0,
         autoSwitching: false,
+        isDoubleRisk: actualDoubleRisk,
         activeModifiers: newModifiers
       });
     });
@@ -1271,12 +1277,14 @@
         db.ref(`courses/${currentSessionId}`).update({ status: 'finished' });
       } else {
         const newModifiers = calculateAndAssignModifiers(joueurs);
+        const actualDoubleRisk = sessionData.pendingDoubleRisk || false;
 
         db.ref(`courses/${currentSessionId}`).update({
           currentQuestion: nextQ,
           firstCorrectPlayer: null,
           answersCount: 0,
           autoSwitching: false,
+          isDoubleRisk: actualDoubleRisk,
           activeModifiers: newModifiers
         });
       }
@@ -1364,6 +1372,7 @@
     if (qIndex === undefined || qIndex < 0 || !QUESTIONS || QUESTIONS.length === 0 || qIndex >= QUESTIONS.length) {
       document.getElementById('player-wait-screen').style.display = 'block';
       document.getElementById('player-question-zone').style.display = 'none';
+      if (riskTimerInterval) clearInterval(riskTimerInterval);
       return;
     }
 
@@ -1391,13 +1400,6 @@
     document.getElementById('q-text').innerText = q.text;
 
     const riskZone = document.getElementById('risk-selector-zone');
-    if (sessionData.isDoubleRisk) {
-      riskZone.style.display = 'block';
-    } else {
-      riskZone.style.display = 'none';
-      playerRiskChoice = false;
-    }
-
     const container = document.getElementById('answers-container');
 
     if (container.dataset.qIndex != qIndex) {
@@ -1408,13 +1410,55 @@
       document.getElementById('feedback-msg').innerText = '';
       container.innerHTML = '';
 
-      q.options.forEach((opt, idx) => {
-        const btn = document.createElement('button');
-        btn.className = 'btn-answer-mobile';
-        btn.innerText = opt;
-        btn.onclick = () => submitAnswer(idx, q.correct);
-        container.appendChild(btn);
-      });
+      if (riskTimerInterval) clearInterval(riskTimerInterval);
+
+      if (sessionData.isDoubleRisk) {
+        riskZone.style.display = 'block';
+        
+        // Bloquer les réponses pendant le compte à rebours de 4 secondes pour le Quitte ou Double
+        let timeLeft = 4;
+        const riskTitleText = document.getElementById('risk-title-text');
+        riskTitleText.innerHTML = `🎲 QUESTION QUITTE OU DOUBLE ! (${timeLeft}s)`;
+
+        // Remplir les boutons masqués ou désactivés temporairement pour les réponses
+        q.options.forEach((opt, idx) => {
+          const btn = document.createElement('button');
+          btn.className = 'btn-answer-mobile';
+          btn.innerText = opt;
+          btn.disabled = true; // Désactivé pendant les 4 secondes du choix quitte ou double
+          btn.style.opacity = '0.4';
+          container.appendChild(btn);
+        });
+
+        riskTimerInterval = setInterval(() => {
+          timeLeft--;
+          if (timeLeft > 0) {
+            riskTitleText.innerHTML = `🎲 QUESTION QUITTE OU DOUBLE ! (${timeLeft}s)`;
+          } else {
+            clearInterval(riskTimerInterval);
+            riskTitleText.innerHTML = `🎲 QUITTE OU DOUBLE SÉLECTIONNÉ (${playerRiskChoice ? 'Risque' : 'Sécurité'})`;
+            // Activer les boutons de réponse après 4 secondes
+            const answerButtons = container.querySelectorAll('.btn-answer-mobile');
+            answerButtons.forEach((btn, idx) => {
+              btn.disabled = false;
+              btn.style.opacity = '1';
+              btn.onclick = () => submitAnswer(idx, q.correct);
+            });
+          }
+        }, 1000);
+
+      } else {
+        riskZone.style.display = 'none';
+        playerRiskChoice = false;
+
+        q.options.forEach((opt, idx) => {
+          const btn = document.createElement('button');
+          btn.className = 'btn-answer-mobile';
+          btn.innerText = opt;
+          btn.onclick = () => submitAnswer(idx, q.correct);
+          container.appendChild(btn);
+        });
+      }
     }
   }
 
@@ -1426,6 +1470,8 @@
       leaveSession();
       return;
     }
+
+    if (riskTimerInterval) clearInterval(riskTimerInterval);
 
     hasAnsweredCurrentQuestion = true;
 
