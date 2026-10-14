@@ -252,6 +252,23 @@
       to   { transform: translateY(-4px) scale(1.08); filter: drop-shadow(0 0 16px #FFF700) drop-shadow(0 0 25px #FF4500); }
     }
 
+    /* LIEN DE CRISTAL (PARI) SUR LA PISTE */
+    .crystal-link {
+      position: absolute;
+      top: 50%;
+      height: 4px;
+      background: linear-gradient(90deg, #00ffff, #ff00ff);
+      transform: translateY(-50%);
+      z-index: 2;
+      pointer-events: none;
+      box-shadow: 0 0 8px #00ffff;
+      animation: crystalPulse 1s infinite alternate ease-in-out;
+    }
+    @keyframes crystalPulse {
+      from { opacity: 0.6; filter: brightness(1); }
+      to { opacity: 1; filter: brightness(1.5); box-shadow: 0 0 14px #ff00ff; }
+    }
+
     /* BONUS & MALUS ANIMATIONS */
     .modifier-badge {
       position: absolute;
@@ -425,7 +442,7 @@
     .btn-answer-mobile.correct { background-color: var(--success) !important; color: white; border-color: var(--success); }
     .btn-answer-mobile.wrong { background-color: var(--danger) !important; color: white; border-color: var(--danger); }
 
-    .risk-choice-card {
+    .risk-choice-card, .bet-choice-card {
       background: #fff3cd;
       border: 2px dashed #ffc107;
       border-radius: 12px;
@@ -433,6 +450,7 @@
       margin-bottom: 12px;
       text-align: center;
     }
+    .bet-choice-card { background: #e8f4fd; border-color: #17a2b8; }
 
     .player-badge {
       display: inline-flex;
@@ -682,6 +700,10 @@
             🎲 Quitte ou Double : OFF
           </button>
 
+          <button id="btn-toggle-bet" class="btn btn-secondary btn-small" style="width:100%; margin:4px 0; font-weight:bold;" onclick="toggleBetMode()">
+            🎯 Pari sur l'Adversaire : OFF
+          </button>
+
           <div style="margin: 8px 0; font-size:0.85rem;">
             <strong>Joueurs (<span id="count-connected">0</span>/6) :</strong>
             <div id="connected-players-list" style="margin-top:4px;">En attente...</div>
@@ -742,6 +764,20 @@
         <div style="display:flex; gap:8px;" id="risk-buttons-container">
           <button id="btn-risk-off" class="btn btn-small btn-secondary" style="flex:1;" onclick="setPlayerRisk(false)">🛡️ Sécurité (+1 / 0)</button>
           <button id="btn-risk-on" class="btn btn-small btn-warning" style="flex:1;" onclick="setPlayerRisk(true)">🎲 Risque (+3 / -2)</button>
+        </div>
+      </div>
+
+      <!-- SÉLECTEUR PARI SUR L'ADVERSAIRE -->
+      <div id="bet-selector-zone" class="bet-choice-card" style="display:none;">
+        <div style="font-weight:bold; font-size:0.9rem; color:#17a2b8; margin-bottom:6px;">🎯 PARI SUR UN ADVERSAIRE (+3 pts)</div>
+        <div style="font-size:0.75rem; color:#555; margin-bottom:8px;">Choisissez une mascotte et son pronostic :</div>
+        
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <select id="bet-target-select" class="form-group" style="padding:6px; border-radius:6px; border:1px solid var(--gray); font-size:0.85rem; margin-bottom:4px;"></select>
+          <div style="display:flex; gap:6px;">
+            <button id="btn-bet-success" class="btn btn-small btn-secondary" style="flex:1; margin:0;" onclick="setPlayerBetOutcome(true)">👍 Va réussir</button>
+            <button id="btn-bet-fail" class="btn btn-small btn-secondary" style="flex:1; margin:0;" onclick="setPlayerBetOutcome(false)">👎 Va échouer</button>
+          </div>
         </div>
       </div>
 
@@ -851,6 +887,10 @@
   let playerRiskChoice = false;
   let riskTimerInterval = null;
 
+  // Variables de pari
+  let playerTargetBet = null;
+  let playerBetOutcome = null;
+
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(id).classList.add('active');
@@ -929,6 +969,8 @@
       modifiersEnabled: false,
       isDoubleRisk: false,
       pendingDoubleRisk: false,
+      isBetMode: false,
+      pendingBetMode: false,
       activeModifiers: {}
     }).then(() => {
       listenToCourse();
@@ -946,13 +988,33 @@
     });
   }
 
+  // Exclusion mutuelle Quitte ou Double / Pari
   function toggleDoubleRisk() {
     if (!currentSessionId || !isAnimator) return;
     const newState = !sessionData.isDoubleRisk;
-    db.ref(`courses/${currentSessionId}`).update({
+    let updates = {
       isDoubleRisk: newState,
       pendingDoubleRisk: newState
-    });
+    };
+    if (newState) {
+      updates.isBetMode = false;
+      updates.pendingBetMode = false;
+    }
+    db.ref(`courses/${currentSessionId}`).update(updates);
+  }
+
+  function toggleBetMode() {
+    if (!currentSessionId || !isAnimator) return;
+    const newState = !sessionData.isBetMode;
+    let updates = {
+      isBetMode: newState,
+      pendingBetMode: newState
+    };
+    if (newState) {
+      updates.isDoubleRisk = false;
+      updates.pendingDoubleRisk = false;
+    }
+    db.ref(`courses/${currentSessionId}`).update(updates);
   }
 
   function calculateAndAssignModifiers(joueursObj) {
@@ -1076,7 +1138,10 @@
         avatar: selectedAvatarId,
         position: 0,
         hasAnswered: false,
-        riskTaken: false
+        riskTaken: false,
+        targetBet: null,
+        betOutcome: null,
+        betSuccess: null
       };
 
       return joueurs;
@@ -1157,6 +1222,15 @@
       btnRisk.innerText = "🎲 Quitte ou Double : OFF";
     }
 
+    const btnBet = document.getElementById('btn-toggle-bet');
+    if (sessionData.isBetMode) {
+      btnBet.className = "btn btn-info btn-small";
+      btnBet.innerText = "🎯 Pari sur l'Adversaire : ON";
+    } else {
+      btnBet.className = "btn btn-secondary btn-small";
+      btnBet.innerText = "🎯 Pari sur l'Adversaire : OFF";
+    }
+
     listEl.innerHTML = entries.map(([pKey, j]) => {
       const isAnswered = j.hasAnswered === true;
       const statusClass = isAnswered ? 'status-answered' : 'status-waiting';
@@ -1186,8 +1260,11 @@
       qBox.style.display = 'block';
 
       const currentQ = QUESTIONS[qIndex];
-      const riskPrefix = sessionData.isDoubleRisk ? "🎲 [QUITTE OU DOUBLE] " : "";
-      document.getElementById('animator-q-title').innerText = `${riskPrefix}${qIndex + 1}. ${currentQ.text}`;
+      let prefix = "";
+      if (sessionData.isDoubleRisk) prefix = "🎲 [QUITTE OU DOUBLE] ";
+      if (sessionData.isBetMode) prefix = "🎯 [MODE PARI] ";
+
+      document.getElementById('animator-q-title').innerText = `${prefix}${qIndex + 1}. ${currentQ.text}`;
 
       const optionsList = document.getElementById('animator-options-list');
       optionsList.innerHTML = '';
@@ -1239,12 +1316,16 @@
           hasAnswered: false,
           lastAnswer: null,
           riskTaken: false,
-          isExploding: false
+          isExploding: false,
+          targetBet: null,
+          betOutcome: null,
+          betSuccess: null
         });
       });
 
       const newModifiers = calculateAndAssignModifiers(joueurs);
       const actualDoubleRisk = sessionData.pendingDoubleRisk || false;
+      const actualBetMode = sessionData.pendingBetMode || false;
 
       db.ref(`courses/${currentSessionId}`).update({
         status: 'active',
@@ -1253,6 +1334,7 @@
         answersCount: 0,
         autoSwitching: false,
         isDoubleRisk: actualDoubleRisk,
+        isBetMode: actualBetMode,
         activeModifiers: newModifiers
       });
     });
@@ -1268,7 +1350,10 @@
           hasAnswered: false,
           lastAnswer: null,
           riskTaken: false,
-          isExploding: false
+          isExploding: false,
+          targetBet: null,
+          betOutcome: null,
+          betSuccess: null
         });
       });
 
@@ -1277,6 +1362,7 @@
       } else {
         const newModifiers = calculateAndAssignModifiers(joueurs);
         const actualDoubleRisk = sessionData.pendingDoubleRisk || false;
+        const actualBetMode = sessionData.pendingBetMode || false;
 
         db.ref(`courses/${currentSessionId}`).update({
           currentQuestion: nextQ,
@@ -1284,13 +1370,14 @@
           answersCount: 0,
           autoSwitching: false,
           isDoubleRisk: actualDoubleRisk,
+          isBetMode: actualBetMode,
           activeModifiers: newModifiers
         });
       }
     });
   }
 
-  // AFFICHAGE DE LA PISTE
+  // AFFICHAGE DE LA PISTE AVEC LES LIENS DE CRISTAL
   function updateRaceTrackV2(joueursObj, firstCorrectKey, activeModifiers) {
     const trackContainer = document.getElementById('race-track-v2');
     trackContainer.innerHTML = '';
@@ -1304,12 +1391,33 @@
     const MAX_THEORETICAL_POINTS = Math.max(QUESTIONS.length * 2, 10);
     const maxCurrentScore = Math.max(...entries.map(([_, j]) => j.position || 0));
 
+    const positionsMap = {};
+    entries.forEach(([pKey, jData]) => {
+      positionsMap[pKey] = Math.min(Math.max((jData.position / MAX_THEORETICAL_POINTS) * 82 + 2, 2), 85);
+    });
+
+    // Rendu des liens de cristal entre parieur et cible
+    entries.forEach(([pKey, jData]) => {
+      if (jData.targetBet && positionsMap[jData.targetBet] !== undefined) {
+        const p1 = positionsMap[pKey];
+        const p2 = positionsMap[jData.targetBet];
+        const leftPos = Math.min(p1, p2);
+        const width = Math.abs(p2 - p1);
+
+        const crystalLink = document.createElement('div');
+        crystalLink.className = 'crystal-link';
+        crystalLink.style.left = `calc(${leftPos}% + 25px)`;
+        crystalLink.style.width = `calc(${width}%)`;
+        trackContainer.appendChild(crystalLink);
+      }
+    });
+
     entries.forEach(([pKey, jData], index) => {
       const avatarInfo = AVATARS.find(a => a.id === jData.avatar) || AVATARS[0];
       const lane = document.createElement('div');
       lane.className = `lane-v2 lane-color-${index % 6}`;
 
-      const progressPct = Math.min(Math.max((jData.position / MAX_THEORETICAL_POINTS) * 82 + 2, 2), 85);
+      const progressPct = positionsMap[pKey];
 
       const isLeader = (jData.position > 0 && jData.position === maxCurrentScore);
       const isFastest = (firstCorrectKey === pKey);
@@ -1340,6 +1448,11 @@
         riskHtml = `<span class="risk-badge" style="left: calc(${progressPct}% + 40px);">🎲</span>`;
       }
 
+      let betBadgeHtml = '';
+      if (jData.targetBet) {
+        betBadgeHtml = `<span class="risk-badge" style="left: calc(${progressPct}% + 40px);">🎯</span>`;
+      }
+
       const isSlipping = jData.isSlipping ? 'slip-spin' : '';
       const isExploding = jData.isExploding ? 'exploding' : '';
 
@@ -1348,6 +1461,7 @@
         <span class="player-tag-center">${jData.name}</span>
         ${modifierHtml}
         ${riskHtml}
+        ${betBadgeHtml}
         ${smokeHtml}
         <img src="${avatarInfo.img}" class="runner-avatar ${isLeader ? 'leader-halo' : ''} ${isSlipping} ${isExploding}" style="left: ${progressPct}%;" onerror="this.src='https://via.placeholder.com/44?text=X'">
         ${rocketHtml}
@@ -1366,8 +1480,26 @@
     document.getElementById('btn-risk-on').className = isRisk ? "btn btn-small btn-danger" : "btn btn-small btn-secondary";
   }
 
+  function setPlayerBetOutcome(outcome) {
+    playerBetOutcome = outcome;
+    const targetSelect = document.getElementById('bet-target-select');
+    playerTargetBet = targetSelect.value;
+
+    if (!playerTargetBet) {
+      alert("Veuillez sélectionner un adversaire dans la liste.");
+      return;
+    }
+
+    document.getElementById('btn-bet-success').className = outcome ? "btn btn-small btn-success" : "btn btn-small btn-secondary";
+    document.getElementById('btn-bet-fail').className = outcome ? "btn btn-small btn-secondary" : "btn btn-small btn-danger";
+
+    db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({
+      targetBet: playerTargetBet,
+      betOutcome: playerBetOutcome
+    });
+  }
+
   function updatePlayerUI() {
-    // CORRECTION DU BUG : Mise à jour du pseudo et de l'avatar dès l'arrivée sur l'écran (même en attente, qIndex = -1)
     if (sessionData.joueurs && sessionData.joueurs[playerId]) {
       const currentPlayer = sessionData.joueurs[playerId];
       const avatarInfo = AVATARS.find(a => a.id === currentPlayer.avatar) || AVATARS[0];
@@ -1399,22 +1531,25 @@
     document.getElementById('q-text').innerText = q.text;
 
     const riskZone = document.getElementById('risk-selector-zone');
+    const betZone = document.getElementById('bet-selector-zone');
     const container = document.getElementById('answers-container');
 
     if (container.dataset.qIndex != qIndex) {
       hasAnsweredCurrentQuestion = false;
       playerRiskChoice = false;
+      playerTargetBet = null;
+      playerBetOutcome = null;
       setPlayerRisk(false);
       container.dataset.qIndex = qIndex;
       document.getElementById('feedback-msg').innerText = '';
-      container.innerHTML = ''; // Nettoyer les réponses pour ne rien afficher au départ
+      container.innerHTML = '';
 
       if (riskTimerInterval) clearInterval(riskTimerInterval);
 
       if (sessionData.isDoubleRisk) {
         riskZone.style.display = 'block';
+        betZone.style.display = 'none';
         
-        // Rendre les boutons cliquables pendant le décompte
         document.getElementById('btn-risk-off').disabled = false;
         document.getElementById('btn-risk-on').disabled = false;
         
@@ -1428,41 +1563,52 @@
             riskTitleText.innerHTML = `🎲 QUESTION QUITTE OU DOUBLE ! (${timeLeft}s)`;
           } else {
             clearInterval(riskTimerInterval);
-            riskTitleText.innerHTML = `🎲 QUITTE OU DOUBLE VERROUILLÉ (${playerRiskChoice ? 'Risque' : 'Sécurité'})`;
-            
-            // Désactiver les boutons de choix du quitte ou double pour qu'on ne puisse plus modifier son choix
+            riskTitleText.innerHTML = `🎲 QUITTE OU DOUBLE VERROUILLÉ`;
             document.getElementById('btn-risk-off').disabled = true;
             document.getElementById('btn-risk-on').disabled = true;
-            
-            // Masquer entièrement le bandeau quitte ou double après le décompte
             riskZone.style.display = 'none';
 
-            // Afficher et générer les boutons de réponses
-            container.innerHTML = '';
-            q.options.forEach((opt, idx) => {
-              const btn = document.createElement('button');
-              btn.className = 'btn-answer-mobile';
-              btn.innerText = opt;
-              btn.onclick = () => submitAnswer(idx, q.correct);
-              container.appendChild(btn);
-            });
+            renderAnswers(q);
           }
         }, 1000);
 
+      } else if (sessionData.isBetMode) {
+        riskZone.style.display = 'none';
+        betZone.style.display = 'block';
+
+        const selectEl = document.getElementById('bet-target-select');
+        selectEl.innerHTML = '<option value="">-- Choisir une mascotte --</option>';
+        if (sessionData.joueurs) {
+          Object.entries(sessionData.joueurs).forEach(([pKey, jData]) => {
+            if (pKey !== playerId) {
+              const opt = document.createElement('option');
+              opt.value = pKey;
+              opt.innerText = jData.name;
+              selectEl.appendChild(opt);
+            }
+          });
+        }
+
+        renderAnswers(q);
+
       } else {
         riskZone.style.display = 'none';
-        playerRiskChoice = false;
-
-        // Si pas de quitte ou double, on affiche les réponses immédiatement
-        q.options.forEach((opt, idx) => {
-          const btn = document.createElement('button');
-          btn.className = 'btn-answer-mobile';
-          btn.innerText = opt;
-          btn.onclick = () => submitAnswer(idx, q.correct);
-          container.appendChild(btn);
-        });
+        betZone.style.display = 'none';
+        renderAnswers(q);
       }
     }
+  }
+
+  function renderAnswers(q) {
+    const container = document.getElementById('answers-container');
+    container.innerHTML = '';
+    q.options.forEach((opt, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'btn-answer-mobile';
+      btn.innerText = opt;
+      btn.onclick = () => submitAnswer(idx, q.correct);
+      container.appendChild(btn);
+    });
   }
 
   function submitAnswer(chosenIdx, correctIdx) {
@@ -1487,10 +1633,20 @@
 
     const feedbackEl = document.getElementById('feedback-msg');
 
+    let betSuccess = false;
+    if (sessionData.isBetMode && playerTargetBet && playerBetOutcome !== null) {
+      const targetPlayer = sessionData.joueurs[playerTargetBet];
+      if (targetPlayer && targetPlayer.lastAnswer !== undefined && targetPlayer.lastAnswer !== null) {
+        const targetIsCorrect = (targetPlayer.lastAnswer === QUESTIONS[sessionData.currentQuestion].correct);
+        betSuccess = (targetIsCorrect === playerBetOutcome);
+      }
+    }
+
     db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ 
       hasAnswered: true,
       lastAnswer: chosenIdx,
-      riskTaken: playerRiskChoice
+      riskTaken: playerRiskChoice,
+      betSuccess: betSuccess
     });
     db.ref(`courses/${currentSessionId}/answersCount`).transaction(count => (count || 0) + 1);
 
@@ -1500,9 +1656,8 @@
     let deltaPoints = 0;
     let bonusText = "";
 
-    // VIBRATIONS PATTERNS DECLARATION
-    const VIB_LONG_DOUBLE = [300, 100, 300]; // Peau de banane / Échec Quitte ou Double
-    const VIB_FAST_SINGLE = 400;              // Le plus rapide / Champignon
+    const VIB_LONG_DOUBLE = [300, 100, 300];
+    const VIB_FAST_SINGLE = 400;
 
     let shouldTriggerFastVib = false;
     let shouldTriggerDoubleLongVib = false;
@@ -1514,8 +1669,7 @@
       } else {
         deltaPoints = -2;
         bonusText = `💥 **BOOM ! ÉCHEC QUITTE OU DOUBLE ! (-2 pts)**`;
-        shouldTriggerDoubleLongVib = true; // 2 impulsions longues
-
+        shouldTriggerDoubleLongVib = true;
         db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isExploding: true });
         setTimeout(() => {
           db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isExploding: false });
@@ -1529,7 +1683,7 @@
         if (isFirst) {
           db.ref(`courses/${currentSessionId}/firstCorrectPlayer`).set(playerId);
           bonusText = `🚀 Bonne réponse ! (+2 pts le plus rapide)`;
-          shouldTriggerFastVib = true; // Impulsion rapide
+          shouldTriggerFastVib = true;
         } else {
           bonusText = `✅ Bonne réponse ! (+1 pt)`;
         }
@@ -1538,22 +1692,31 @@
       }
     }
 
+    // Calcul des points du pari sur l'adversaire (+3 pts si réussi)
+    if (sessionData.isBetMode) {
+      if (betSuccess) {
+        deltaPoints += 3;
+        bonusText += `<br><span style="color:#28a745; font-size:1.1rem;">🎯 **BIEN VU ! Pari réussi ! (+3 pts)**</span>`;
+        shouldTriggerFastVib = true;
+      } else {
+        bonusText += `<br><span style="color:#dc3545;">❌ Pari manqué (+0 pt)</span>`;
+      }
+    }
+
     if (playerModifier === 'mushroom') {
       deltaPoints += 1;
       bonusText += ` <br>🍄 **Bonus Champignon : +1 pt supplémentaire !**`;
-      shouldTriggerFastVib = true; // Impulsion rapide
+      shouldTriggerFastVib = true;
     } else if (playerModifier === 'banana') {
       deltaPoints -= 1;
       bonusText += ` <br>🍌 **Oups ! Glissade sur une peau de banane : -1 pt !**`;
-      shouldTriggerDoubleLongVib = true; // 2 impulsions longues
-      
+      shouldTriggerDoubleLongVib = true;
       db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isSlipping: true });
       setTimeout(() => {
         db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isSlipping: false });
       }, 900);
     }
 
-    // EXÉCUTION DE LA VIBRATION SELON LES RÈGLES
     if (shouldTriggerDoubleLongVib) {
       triggerVibration(VIB_LONG_DOUBLE);
     } else if (shouldTriggerFastVib) {
