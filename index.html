@@ -1275,12 +1275,63 @@
       });
 
       if (allHaveAnswered && !sessionData.autoSwitching) {
+        // QUAND TOUT LE MONDE A RÉPONDU : CALCUL GLOBAL DES PARIS ET DES SCORES
+        processAllBetsAndScores(currentQ.correct);
         db.ref(`courses/${currentSessionId}`).update({ autoSwitching: true });
         setTimeout(() => { forceNextQuestion(); }, 3000);
       }
     } else {
       document.getElementById('animator-q-box').style.display = 'none';
     }
+  }
+
+  // FONCTION DE CALCUL GLOBAL LORSQUE TOUT LE MONDE A RÉPONDU
+  function processAllBetsAndScores(correctIdx) {
+    db.ref(`courses/${currentSessionId}/joueurs`).once('value', snapshot => {
+      const joueurs = snapshot.val() || {};
+      const activeModifiers = sessionData.activeModifiers || {};
+      const isBetActive = sessionData.isBetMode;
+
+      const updates = {};
+
+      Object.entries(joueurs).forEach(([pKey, jData]) => {
+        let deltaPoints = 0;
+        let isCorrect = (jData.lastAnswer === correctIdx);
+        let betSuccess = false;
+
+        // 1. Calcul points de base / quitte ou double
+        if (sessionData.isDoubleRisk && jData.riskTaken) {
+          deltaPoints += isCorrect ? 3 : -2;
+        } else if (isCorrect) {
+          const isFirst = (sessionData.firstCorrectPlayer === pKey);
+          deltaPoints += isFirst ? 2 : 1;
+        }
+
+        // 2. Calcul du Pari sur l'adversaire (GLOBAL)
+        if (isBetActive && jData.targetBet && jData.betOutcome !== null) {
+          const targetPlayer = joueurs[jData.targetBet];
+          if (targetPlayer && targetPlayer.lastAnswer !== undefined && targetPlayer.lastAnswer !== null) {
+            const targetIsCorrect = (targetPlayer.lastAnswer === correctIdx);
+            betSuccess = (targetIsCorrect === jData.betOutcome);
+            if (betSuccess) {
+              deltaPoints += 3;
+            }
+          }
+        }
+
+        // 3. Modificateurs (Champignon / Banane)
+        const pMod = activeModifiers[pKey];
+        if (pMod === 'mushroom') deltaPoints += 1;
+        if (pMod === 'banana') deltaPoints -= 1;
+
+        const newPos = Math.max(0, (jData.position || 0) + deltaPoints);
+
+        updates[`${pKey}/position`] = newPos;
+        updates[`${pKey}/betSuccess`] = isBetActive ? betSuccess : null;
+      });
+
+      db.ref(`courses/${currentSessionId}/joueurs`).update(updates);
+    });
   }
 
   function startFirstQuestion() {
@@ -1464,6 +1515,20 @@
         avatarEl.src = avatarInfo.img;
         avatarEl.style.display = 'block';
       }
+
+      // AFFICHAGE DU RÉSULTAT DU PARI QUAND DISPONIBLE (SUR LE SMARTPHONE)
+      if (hasAnsweredCurrentQuestion && currentPlayer.betSuccess !== undefined && currentPlayer.betSuccess !== null) {
+        const feedbackEl = document.getElementById('feedback-msg');
+        if (currentPlayer.betSuccess) {
+          if (!feedbackEl.innerHTML.includes("🎯")) {
+            feedbackEl.innerHTML += `<br><span style="color:#28a745; font-size:1.1rem;">🎯 **BIEN VU ! Pari réussi ! (+3 pts)**</span>`;
+          }
+        } else {
+          if (!feedbackEl.innerHTML.includes("Pari manqué")) {
+            feedbackEl.innerHTML += `<br><span style="color:#dc3545;">❌ Pari manqué (+0 pt)</span>`;
+          }
+        }
+      }
     }
 
     const qIndex = sessionData.currentQuestion;
@@ -1585,23 +1650,17 @@
 
     const feedbackEl = document.getElementById('feedback-msg');
 
-    // CORRECTION DU BUG DE VÉRIFICATION DU PARI :
-    // On s'assure de récupérer l'état frais du joueur cible directement depuis la session Firebase actualisée
-    let betSuccess = false;
-    if (sessionData.isBetMode && playerTargetBet && playerBetOutcome !== null) {
-      const targetPlayer = sessionData.joueurs[playerTargetBet];
-      if (targetPlayer && targetPlayer.lastAnswer !== undefined && targetPlayer.lastAnswer !== null) {
-        const targetIsCorrect = (targetPlayer.lastAnswer === correctIdx);
-        betSuccess = (targetIsCorrect === playerBetOutcome);
-      }
-    }
+    // ENREGISTREMENT DES DONNÉES DU JOUEUR (SANS CALCULER LE SCORE DE LA COURSE ICI)
+    db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ 
+      hasAnswered: true,
+      lastAnswer: chosenIdx,
+      riskTaken: playerRiskChoice,
+      targetBet: playerTargetBet,
+      betOutcome: playerBetOutcome
+    });
+    db.ref(`courses/${currentSessionId}/answersCount`).transaction(count => (count || 0) + 1);
 
-    const activeModifiers = sessionData.activeModifiers || {};
-    const playerModifier = activeModifiers[playerId];
-
-    let deltaPoints = 0;
     let bonusText = "";
-
     const VIB_LONG_DOUBLE = [300, 100, 300];
     const VIB_FAST_SINGLE = 400;
 
@@ -1610,10 +1669,8 @@
 
     if (sessionData.isDoubleRisk && playerRiskChoice) {
       if (isCorrect) {
-        deltaPoints = 3;
         bonusText = `💥 **QUITTE OU DOUBLE RÉUSSI ! (+3 pts)**`;
       } else {
-        deltaPoints = -2;
         bonusText = `💥 **BOOM ! ÉCHEC QUITTE OU DOUBLE ! (-2 pts)**`;
         shouldTriggerDoubleLongVib = true;
         db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isExploding: true });
@@ -1624,8 +1681,6 @@
     } else {
       if (isCorrect) {
         const isFirst = !sessionData.firstCorrectPlayer;
-        deltaPoints = isFirst ? 2 : 1;
-
         if (isFirst) {
           db.ref(`courses/${currentSessionId}/firstCorrectPlayer`).set(playerId);
           bonusText = `🚀 Bonne réponse ! (+2 pts le plus rapide)`;
@@ -1638,22 +1693,13 @@
       }
     }
 
-    if (sessionData.isBetMode) {
-      if (betSuccess) {
-        deltaPoints += 3;
-        bonusText += `<br><span style="color:#28a745; font-size:1.1rem;">🎯 **BIEN VU ! Pari réussi ! (+3 pts)**</span>`;
-        shouldTriggerFastVib = true;
-      } else {
-        bonusText += `<br><span style="color:#dc3545;">❌ Pari manqué (+0 pt)</span>`;
-      }
-    }
+    const activeModifiers = sessionData.activeModifiers || {};
+    const playerModifier = activeModifiers[playerId];
 
     if (playerModifier === 'mushroom') {
-      deltaPoints += 1;
       bonusText += ` <br>🍄 **Bonus Champignon : +1 pt supplémentaire !**`;
       shouldTriggerFastVib = true;
     } else if (playerModifier === 'banana') {
-      deltaPoints -= 1;
       bonusText += ` <br>🍌 **Oups ! Glissade sur une peau de banane : -1 pt !**`;
       shouldTriggerDoubleLongVib = true;
       db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isSlipping: true });
@@ -1669,20 +1715,6 @@
     }
 
     feedbackEl.innerHTML = bonusText;
-
-    // Utilisation d'une transaction Firebase sécurisée pour additionner les points proprement sans risque d'écrasement
-    const playerRef = db.ref(`courses/${currentSessionId}/joueurs/${playerId}`);
-    playerRef.transaction((playerData) => {
-      if (!playerData) return;
-      playerData.hasAnswered = true;
-      playerData.lastAnswer = chosenIdx;
-      playerData.riskTaken = playerRiskChoice;
-      playerData.betSuccess = betSuccess;
-      playerData.position = Math.max(0, (playerData.position || 0) + deltaPoints);
-      return playerData;
-    });
-
-    db.ref(`courses/${currentSessionId}/answersCount`).transaction(count => (count || 0) + 1);
   }
 
   function showEndScreen(joueursObj) {
