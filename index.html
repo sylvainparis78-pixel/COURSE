@@ -19,6 +19,7 @@
       --white: #ffffff;
       --success: #28a745;
       --danger: #dc3545;
+      --turbo: #8a2be2;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -76,6 +77,8 @@
     .btn-warning { background-color: var(--accent); color: #000; }
     .btn-danger { background-color: var(--danger); color: white; }
     .btn-info { background-color: #17a2b8; color: white; }
+    .btn-turbo { background-color: var(--turbo); color: white; border: 2px dashed #fff; }
+    .btn-turbo.active-turbo { background-color: #4b0082; box-shadow: 0 0 10px var(--turbo); transform: scale(1.02); }
     .btn-small { padding: 6px 12px; font-size: 0.8rem; width: auto; margin: 0; }
 
     .avatar-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 8px; }
@@ -272,6 +275,29 @@
     @keyframes pulseRisk {
       from { transform: scale(0.9); }
       to { transform: scale(1.2); }
+    }
+
+    /* TURBO-BOOST ANIMATION ET BADGE (ÉLÉCTRIQUE VIOLET) */
+    .turbo-badge {
+      position: absolute;
+      z-index: 4;
+      font-size: 1.3rem;
+      pointer-events: none;
+      transition: left 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+      animation: pulseTurbo 0.4s infinite alternate ease-in-out;
+    }
+    @keyframes pulseTurbo {
+      from { transform: scale(0.8) rotate(-10deg); filter: drop-shadow(0 0 4px #8a2be2); }
+      to { transform: scale(1.3) rotate(10deg); filter: drop-shadow(0 0 12px #da70d6); }
+    }
+
+    .electric-halo {
+      filter: drop-shadow(0 0 10px #8a2be2) drop-shadow(0 0 20px #9400d3) !important;
+      animation: electricGlow 0.4s infinite alternate ease-in-out !important;
+    }
+    @keyframes electricGlow {
+      from { transform: translateY(0px) scale(1); filter: drop-shadow(0 0 8px #8a2be2); }
+      to   { transform: translateY(-3px) scale(1.06); filter: drop-shadow(0 0 16px #da70d6); }
     }
 
     .mushroom-boost {
@@ -736,6 +762,13 @@
         <p id="q-text" style="font-size:1.05rem; margin-top:6px; font-weight:600;"></p>
       </div>
 
+      <!-- SÉLECTEUR TURBO-BOOST -->
+      <div id="turbo-selector-zone" style="margin-bottom: 8px;">
+        <button id="btn-turbo-boost" class="btn btn-turbo btn-small" style="width: 100%; font-weight: bold;" onclick="togglePlayerTurbo()">
+          ⚡ Activer Turbo-Boost (2 restants)
+        </button>
+      </div>
+
       <!-- SÉLECTEUR QUITTE OU DOUBLE -->
       <div id="risk-selector-zone" class="risk-choice-card" style="display:none;">
         <div style="font-weight:bold; font-size:0.9rem; color:#856404; margin-bottom:8px;" id="risk-title-text">🎲 QUESTION QUITTE OU DOUBLE ! Choix requis</div>
@@ -814,7 +847,6 @@
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
 
-  // FONCTION SÉCURISÉE DE VIBRATION (AVEC FALLBACK iOS/DESKTOP GARANTI)
   function triggerVibration(pattern) {
     try {
       if ("vibrate" in navigator && typeof navigator.vibrate === "function") {
@@ -849,6 +881,7 @@
   let hasAnsweredCurrentQuestion = false;
   let reviewQuestionIndex = 0;
   let playerRiskChoice = false;
+  let playerTurboActive = false;
   let riskTimerInterval = null;
 
   function showScreen(id) {
@@ -899,7 +932,6 @@
     return null;
   }
 
-  // 1. CRÉATION ANIMATEUR
   async function createGameAsAnimator() {
     const inputCode = document.getElementById('input-session-code').value.trim().toUpperCase();
     currentSessionId = inputCode || Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -991,7 +1023,6 @@
     return modifiers;
   }
 
-  // 2. VERIFICATION DU CODE ET CHARGEMENT DES AVATARS
   function checkAndLoadAvatars() {
     const code = document.getElementById('input-session-code').value.trim().toUpperCase();
     if (!code) { alert("Veuillez saisir un code de partie."); return; }
@@ -1052,7 +1083,6 @@
     });
   }
 
-  // 3. REJOINDRE LA PARTIE
   function joinGame() {
     const name = document.getElementById('input-player-name').value.trim();
     if (!name) { alert("Saisissez votre nom ou votre équipe."); return; }
@@ -1076,7 +1106,9 @@
         avatar: selectedAvatarId,
         position: 0,
         hasAnswered: false,
-        riskTaken: false
+        riskTaken: false,
+        turboCount: 2,
+        turboActive: false
       };
 
       return joueurs;
@@ -1093,7 +1125,6 @@
     });
   }
 
-  // 4. ÉCOUTE TEMPS RÉEL
   function listenToCourse() {
     if (!currentSessionId) return;
 
@@ -1127,7 +1158,6 @@
     });
   }
 
-  // 5. CONSOLE ANIMATEUR
   function removePlayer(pKey) {
     if (!currentSessionId || !pKey) return;
     db.ref(`courses/${currentSessionId}/joueurs/${pKey}`).remove();
@@ -1239,6 +1269,7 @@
           hasAnswered: false,
           lastAnswer: null,
           riskTaken: false,
+          turboActive: false,
           isExploding: false
         });
       });
@@ -1268,6 +1299,7 @@
           hasAnswered: false,
           lastAnswer: null,
           riskTaken: false,
+          turboActive: false,
           isExploding: false
         });
       });
@@ -1290,7 +1322,6 @@
     });
   }
 
-  // AFFICHAGE DE LA PISTE
   function updateRaceTrackV2(joueursObj, firstCorrectKey, activeModifiers) {
     const trackContainer = document.getElementById('race-track-v2');
     trackContainer.innerHTML = '';
@@ -1340,16 +1371,23 @@
         riskHtml = `<span class="risk-badge" style="left: calc(${progressPct}% + 40px);">🎲</span>`;
       }
 
+      let turboHtml = '';
+      if (jData.turboActive) {
+        turboHtml = `<span class="turbo-badge" style="left: calc(${progressPct}% + 40px);">⚡</span>`;
+      }
+
       const isSlipping = jData.isSlipping ? 'slip-spin' : '';
       const isExploding = jData.isExploding ? 'exploding' : '';
+      const isElectric = jData.turboActive ? 'electric-halo' : (isLeader ? 'leader-halo' : '');
 
       lane.innerHTML = `
         <span class="player-tag">${jData.name}</span>
         <span class="player-tag-center">${jData.name}</span>
         ${modifierHtml}
         ${riskHtml}
+        ${turboHtml}
         ${smokeHtml}
-        <img src="${avatarInfo.img}" class="runner-avatar ${isLeader ? 'leader-halo' : ''} ${isSlipping} ${isExploding}" style="left: ${progressPct}%;" onerror="this.src='https://via.placeholder.com/44?text=X'">
+        <img src="${avatarInfo.img}" class="runner-avatar ${isElectric} ${isSlipping} ${isExploding}" style="left: ${progressPct}%;" onerror="this.src='https://via.placeholder.com/44?text=X'">
         ${rocketHtml}
         <span class="score-badge">${jData.position} pts</span>
         <div class="finish-line"></div>
@@ -1359,15 +1397,39 @@
     });
   }
 
-  // 6. INTERFACE MOBILES
   function setPlayerRisk(isRisk) {
     playerRiskChoice = isRisk;
     document.getElementById('btn-risk-off').className = isRisk ? "btn btn-small btn-secondary" : "btn btn-small btn-warning";
     document.getElementById('btn-risk-on').className = isRisk ? "btn btn-small btn-danger" : "btn btn-small btn-secondary";
   }
 
+  function togglePlayerTurbo() {
+    if (hasAnsweredCurrentQuestion) return;
+    
+    // Vérifier combien de turbos il reste au joueur
+    db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).once('value', snap => {
+      const pData = snap.val() || {};
+      const currentCount = pData.turboCount !== undefined ? pData.turboCount : 2;
+
+      if (!playerTurboActive && currentCount <= 0) {
+        alert("Vous n'avez plus de Turbo-Boost disponible !");
+        return;
+      }
+
+      playerTurboActive = !playerTurboActive;
+      const btn = document.getElementById('btn-turbo-boost');
+
+      if (playerTurboActive) {
+        btn.classList.add('active-turbo');
+        btn.innerText = `⚡ Turbo-Boost ACTIVÉ ! (${currentCount} restants)`;
+      } else {
+        btn.classList.remove('active-turbo');
+        btn.innerText = `⚡ Activer Turbo-Boost (${currentCount} restants)`;
+      }
+    });
+  }
+
   function updatePlayerUI() {
-    // CORRECTION DU BUG : Mise à jour du pseudo et de l'avatar dès l'arrivée sur l'écran (même en attente, qIndex = -1)
     if (sessionData.joueurs && sessionData.joueurs[playerId]) {
       const currentPlayer = sessionData.joueurs[playerId];
       const avatarInfo = AVATARS.find(a => a.id === currentPlayer.avatar) || AVATARS[0];
@@ -1399,22 +1461,35 @@
     document.getElementById('q-text').innerText = q.text;
 
     const riskZone = document.getElementById('risk-selector-zone');
+    const turboZone = document.getElementById('turbo-selector-zone');
     const container = document.getElementById('answers-container');
 
     if (container.dataset.qIndex != qIndex) {
       hasAnsweredCurrentQuestion = false;
       playerRiskChoice = false;
+      playerTurboActive = false;
       setPlayerRisk(false);
+
+      // Réinitialiser le bouton turbo
+      db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).once('value', snap => {
+        const pData = snap.val() || {};
+        const count = pData.turboCount !== undefined ? pData.turboCount : 2;
+        const turboBtn = document.getElementById('btn-turbo-boost');
+        turboBtn.classList.remove('active-turbo');
+        turboBtn.disabled = (count <= 0);
+        turboBtn.innerText = count > 0 ? `⚡ Activer Turbo-Boost (${count} restants)` : `⚡ Turbo-Boost épuisés (0)`;
+        turboZone.style.display = (count > 0) ? 'block' : 'none';
+      });
+
       container.dataset.qIndex = qIndex;
       document.getElementById('feedback-msg').innerText = '';
-      container.innerHTML = ''; // Nettoyer les réponses pour ne rien afficher au départ
+      container.innerHTML = '';
 
       if (riskTimerInterval) clearInterval(riskTimerInterval);
 
       if (sessionData.isDoubleRisk) {
         riskZone.style.display = 'block';
         
-        // Rendre les boutons cliquables pendant le décompte
         document.getElementById('btn-risk-off').disabled = false;
         document.getElementById('btn-risk-on').disabled = false;
         
@@ -1430,14 +1505,10 @@
             clearInterval(riskTimerInterval);
             riskTitleText.innerHTML = `🎲 QUITTE OU DOUBLE VERROUILLÉ (${playerRiskChoice ? 'Risque' : 'Sécurité'})`;
             
-            // Désactiver les boutons de choix du quitte ou double pour qu'on ne puisse plus modifier son choix
             document.getElementById('btn-risk-off').disabled = true;
             document.getElementById('btn-risk-on').disabled = true;
-            
-            // Masquer entièrement le bandeau quitte ou double après le décompte
             riskZone.style.display = 'none';
 
-            // Afficher et générer les boutons de réponses
             container.innerHTML = '';
             q.options.forEach((opt, idx) => {
               const btn = document.createElement('button');
@@ -1453,7 +1524,6 @@
         riskZone.style.display = 'none';
         playerRiskChoice = false;
 
-        // Si pas de quitte ou double, on affiche les réponses immédiatement
         q.options.forEach((opt, idx) => {
           const btn = document.createElement('button');
           btn.className = 'btn-answer-mobile';
@@ -1480,6 +1550,7 @@
 
     const buttons = document.querySelectorAll('.btn-answer-mobile');
     buttons.forEach(b => b.disabled = true);
+    document.getElementById('btn-turbo-boost').disabled = true;
 
     const isCorrect = (chosenIdx === correctIdx);
     buttons[chosenIdx].classList.add(isCorrect ? 'correct' : 'wrong');
@@ -1487,90 +1558,111 @@
 
     const feedbackEl = document.getElementById('feedback-msg');
 
-    db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ 
-      hasAnswered: true,
-      lastAnswer: chosenIdx,
-      riskTaken: playerRiskChoice
-    });
-    db.ref(`courses/${currentSessionId}/answersCount`).transaction(count => (count || 0) + 1);
+    db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).once('value', snap => {
+      const pData = snap.val() || {};
+      let currentTurboCount = pData.turboCount !== undefined ? pData.turboCount : 2;
+      let newTurboCount = currentTurboCount;
 
-    const activeModifiers = sessionData.activeModifiers || {};
-    const playerModifier = activeModifiers[playerId];
-
-    let deltaPoints = 0;
-    let bonusText = "";
-
-    // VIBRATIONS PATTERNS DECLARATION
-    const VIB_LONG_DOUBLE = [300, 100, 300]; // Peau de banane / Échec Quitte ou Double
-    const VIB_FAST_SINGLE = 400;              // Le plus rapide / Champignon
-
-    let shouldTriggerFastVib = false;
-    let shouldTriggerDoubleLongVib = false;
-
-    if (sessionData.isDoubleRisk && playerRiskChoice) {
-      if (isCorrect) {
-        deltaPoints = 3;
-        bonusText = `💥 **QUITTE OU DOUBLE RÉUSSI ! (+3 pts)**`;
+      if (playerTurboActive && currentTurboCount > 0) {
+        newTurboCount -= 1;
       } else {
-        deltaPoints = -2;
-        bonusText = `💥 **BOOM ! ÉCHEC QUITTE OU DOUBLE ! (-2 pts)**`;
-        shouldTriggerDoubleLongVib = true; // 2 impulsions longues
-
-        db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isExploding: true });
-        setTimeout(() => {
-          db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isExploding: false });
-        }, 1200);
+        playerTurboActive = false;
       }
-    } else {
-      if (isCorrect) {
-        const isFirst = !sessionData.firstCorrectPlayer;
-        deltaPoints = isFirst ? 2 : 1;
 
-        if (isFirst) {
-          db.ref(`courses/${currentSessionId}/firstCorrectPlayer`).set(playerId);
-          bonusText = `🚀 Bonne réponse ! (+2 pts le plus rapide)`;
-          shouldTriggerFastVib = true; // Impulsion rapide
+      db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ 
+        hasAnswered: true,
+        lastAnswer: chosenIdx,
+        riskTaken: playerRiskChoice,
+        turboActive: playerTurboActive,
+        turboCount: newTurboCount
+      });
+      db.ref(`courses/${currentSessionId}/answersCount`).transaction(count => (count || 0) + 1);
+
+      const activeModifiers = sessionData.activeModifiers || {};
+      const playerModifier = activeModifiers[playerId];
+
+      let deltaPoints = 0;
+      let bonusText = "";
+
+      const VIB_LONG_DOUBLE = [300, 100, 300];
+      const VIB_FAST_SINGLE = 400;
+
+      let shouldTriggerFastVib = false;
+      let shouldTriggerDoubleLongVib = false;
+
+      if (sessionData.isDoubleRisk && playerRiskChoice) {
+        if (isCorrect) {
+          deltaPoints = 3;
+          bonusText = `💥 **QUITTE OU DOUBLE RÉUSSI ! (+3 pts)**`;
         } else {
-          bonusText = `✅ Bonne réponse ! (+1 pt)`;
+          deltaPoints = -2;
+          bonusText = `💥 **BOOM ! ÉCHEC QUITTE OU DOUBLE ! (-2 pts)**`;
+          shouldTriggerDoubleLongVib = true;
+
+          db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isExploding: true });
+          setTimeout(() => {
+            db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isExploding: false });
+          }, 1200);
         }
       } else {
-        bonusText = `❌ Mauvaise réponse. (+0 pt)`;
+        if (isCorrect) {
+          const isFirst = !sessionData.firstCorrectPlayer;
+          let basePoints = isFirst ? 2 : 1;
+
+          if (playerTurboActive) {
+            basePoints *= 2; // Double les points avec le Turbo-Boost !
+          }
+
+          deltaPoints = basePoints;
+
+          if (isFirst) {
+            db.ref(`courses/${currentSessionId}/firstCorrectPlayer`).set(playerId);
+            bonusText = playerTurboActive 
+              ? `⚡🚀 **TURBO-BOOST + PREMIER ! (+${basePoints} pts)**` 
+              : `🚀 Bonne réponse ! (+2 pts le plus rapide)`;
+            shouldTriggerFastVib = true;
+          } else {
+            bonusText = playerTurboActive 
+              ? `⚡✅ **TURBO-BOOST ACTIVÉ ! (+${basePoints} pts)**` 
+              : `✅ Bonne réponse ! (+1 pt)`;
+          }
+        } else {
+          bonusText = `❌ Mauvaise réponse. (+0 pt)`;
+        }
       }
-    }
 
-    if (playerModifier === 'mushroom') {
-      deltaPoints += 1;
-      bonusText += ` <br>🍄 **Bonus Champignon : +1 pt supplémentaire !**`;
-      shouldTriggerFastVib = true; // Impulsion rapide
-    } else if (playerModifier === 'banana') {
-      deltaPoints -= 1;
-      bonusText += ` <br>🍌 **Oups ! Glissade sur une peau de banane : -1 pt !**`;
-      shouldTriggerDoubleLongVib = true; // 2 impulsions longues
-      
-      db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isSlipping: true });
-      setTimeout(() => {
-        db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isSlipping: false });
-      }, 900);
-    }
+      if (playerModifier === 'mushroom') {
+        deltaPoints += 1;
+        bonusText += ` <br>🍄 **Bonus Champignon : +1 pt supplémentaire !**`;
+        shouldTriggerFastVib = true;
+      } else if (playerModifier === 'banana') {
+        deltaPoints -= 1;
+        bonusText += ` <br>🍌 **Oups ! Glissade sur une peau de banane : -1 pt !**`;
+        shouldTriggerDoubleLongVib = true;
+        
+        db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isSlipping: true });
+        setTimeout(() => {
+          db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isSlipping: false });
+        }, 900);
+      }
 
-    // EXÉCUTION DE LA VIBRATION SELON LES RÈGLES
-    if (shouldTriggerDoubleLongVib) {
-      triggerVibration(VIB_LONG_DOUBLE);
-    } else if (shouldTriggerFastVib) {
-      triggerVibration(VIB_FAST_SINGLE);
-    }
+      if (shouldTriggerDoubleLongVib) {
+        triggerVibration(VIB_LONG_DOUBLE);
+      } else if (shouldTriggerFastVib) {
+        triggerVibration(VIB_FAST_SINGLE);
+      }
 
-    feedbackEl.innerHTML = bonusText;
+      feedbackEl.innerHTML = bonusText;
 
-    const currentPos = (sessionData.joueurs[playerId] && sessionData.joueurs[playerId].position) || 0;
-    const newPos = Math.max(0, currentPos + deltaPoints);
+      const currentPos = pData.position || 0;
+      const newPos = Math.max(0, currentPos + deltaPoints);
 
-    db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({
-      position: newPos
+      db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({
+        position: newPos
+      });
     });
   }
 
-  // 7. ÉCRAN FIN ET GESTION DU CLASSEMENT / PODIUM
   function showEndScreen(joueursObj) {
     localStorage.removeItem('race_sessionCode');
     showScreen('screen-end');
