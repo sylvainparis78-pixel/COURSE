@@ -1352,7 +1352,6 @@
     });
   }
 
-  // AFFICHAGE DE LA PISTE (Sans les liens de cristal)
   function updateRaceTrackV2(joueursObj, firstCorrectKey, activeModifiers) {
     const trackContainer = document.getElementById('race-track-v2');
     trackContainer.innerHTML = '';
@@ -1586,22 +1585,16 @@
 
     const feedbackEl = document.getElementById('feedback-msg');
 
+    // CORRECTION DU BUG DE VÉRIFICATION DU PARI :
+    // On s'assure de récupérer l'état frais du joueur cible directement depuis la session Firebase actualisée
     let betSuccess = false;
     if (sessionData.isBetMode && playerTargetBet && playerBetOutcome !== null) {
       const targetPlayer = sessionData.joueurs[playerTargetBet];
       if (targetPlayer && targetPlayer.lastAnswer !== undefined && targetPlayer.lastAnswer !== null) {
-        const targetIsCorrect = (targetPlayer.lastAnswer === QUESTIONS[sessionData.currentQuestion].correct);
+        const targetIsCorrect = (targetPlayer.lastAnswer === correctIdx);
         betSuccess = (targetIsCorrect === playerBetOutcome);
       }
     }
-
-    db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ 
-      hasAnswered: true,
-      lastAnswer: chosenIdx,
-      riskTaken: playerRiskChoice,
-      betSuccess: betSuccess
-    });
-    db.ref(`courses/${currentSessionId}/answersCount`).transaction(count => (count || 0) + 1);
 
     const activeModifiers = sessionData.activeModifiers || {};
     const playerModifier = activeModifiers[playerId];
@@ -1677,12 +1670,19 @@
 
     feedbackEl.innerHTML = bonusText;
 
-    const currentPos = (sessionData.joueurs[playerId] && sessionData.joueurs[playerId].position) || 0;
-    const newPos = Math.max(0, currentPos + deltaPoints);
-
-    db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({
-      position: newPos
+    // Utilisation d'une transaction Firebase sécurisée pour additionner les points proprement sans risque d'écrasement
+    const playerRef = db.ref(`courses/${currentSessionId}/joueurs/${playerId}`);
+    playerRef.transaction((playerData) => {
+      if (!playerData) return;
+      playerData.hasAnswered = true;
+      playerData.lastAnswer = chosenIdx;
+      playerData.riskTaken = playerRiskChoice;
+      playerData.betSuccess = betSuccess;
+      playerData.position = Math.max(0, (playerData.position || 0) + deltaPoints);
+      return playerData;
     });
+
+    db.ref(`courses/${currentSessionId}/answersCount`).transaction(count => (count || 0) + 1);
   }
 
   function showEndScreen(joueursObj) {
