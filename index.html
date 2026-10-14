@@ -252,23 +252,6 @@
       to   { transform: translateY(-4px) scale(1.08); filter: drop-shadow(0 0 16px #FFF700) drop-shadow(0 0 25px #FF4500); }
     }
 
-    /* LIEN DE CRISTAL (PARI) SUR LA PISTE */
-    .crystal-link {
-      position: absolute;
-      top: 50%;
-      height: 4px;
-      background: linear-gradient(90deg, #00ffff, #ff00ff);
-      transform: translateY(-50%);
-      z-index: 2;
-      pointer-events: none;
-      box-shadow: 0 0 8px #00ffff;
-      animation: crystalPulse 1s infinite alternate ease-in-out;
-    }
-    @keyframes crystalPulse {
-      from { opacity: 0.6; filter: brightness(1); }
-      to { opacity: 1; filter: brightness(1.5); box-shadow: 0 0 14px #ff00ff; }
-    }
-
     /* BONUS & MALUS ANIMATIONS */
     .modifier-badge {
       position: absolute;
@@ -850,14 +833,13 @@
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
 
-  // FONCTION SÉCURISÉE DE VIBRATION (AVEC FALLBACK iOS/DESKTOP GARANTI)
   function triggerVibration(pattern) {
     try {
       if ("vibrate" in navigator && typeof navigator.vibrate === "function") {
         navigator.vibrate(pattern);
       }
     } catch (e) {
-      console.warn("Vibration non supportée sur cet appareil ou bloquée par le navigateur.", e);
+      console.warn("Vibration non supportée.", e);
     }
   }
 
@@ -887,7 +869,6 @@
   let playerRiskChoice = false;
   let riskTimerInterval = null;
 
-  // Variables de pari
   let playerTargetBet = null;
   let playerBetOutcome = null;
 
@@ -939,7 +920,6 @@
     return null;
   }
 
-  // 1. CRÉATION ANIMATEUR
   async function createGameAsAnimator() {
     const inputCode = document.getElementById('input-session-code').value.trim().toUpperCase();
     currentSessionId = inputCode || Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -988,7 +968,6 @@
     });
   }
 
-  // Exclusion mutuelle Quitte ou Double / Pari
   function toggleDoubleRisk() {
     if (!currentSessionId || !isAnimator) return;
     const newState = !sessionData.isDoubleRisk;
@@ -1053,7 +1032,6 @@
     return modifiers;
   }
 
-  // 2. VERIFICATION DU CODE ET CHARGEMENT DES AVATARS
   function checkAndLoadAvatars() {
     const code = document.getElementById('input-session-code').value.trim().toUpperCase();
     if (!code) { alert("Veuillez saisir un code de partie."); return; }
@@ -1114,7 +1092,6 @@
     });
   }
 
-  // 3. REJOINDRE LA PARTIE
   function joinGame() {
     const name = document.getElementById('input-player-name').value.trim();
     if (!name) { alert("Saisissez votre nom ou votre équipe."); return; }
@@ -1158,7 +1135,6 @@
     });
   }
 
-  // 4. ÉCOUTE TEMPS RÉEL
   function listenToCourse() {
     if (!currentSessionId) return;
 
@@ -1192,7 +1168,6 @@
     });
   }
 
-  // 5. CONSOLE ANIMATEUR
   function removePlayer(pKey) {
     if (!currentSessionId || !pKey) return;
     db.ref(`courses/${currentSessionId}/joueurs/${pKey}`).remove();
@@ -1377,7 +1352,7 @@
     });
   }
 
-  // AFFICHAGE DE LA PISTE AVEC LES LIENS DE CRISTAL
+  // AFFICHAGE DE LA PISTE (Sans les liens de cristal)
   function updateRaceTrackV2(joueursObj, firstCorrectKey, activeModifiers) {
     const trackContainer = document.getElementById('race-track-v2');
     trackContainer.innerHTML = '';
@@ -1391,33 +1366,12 @@
     const MAX_THEORETICAL_POINTS = Math.max(QUESTIONS.length * 2, 10);
     const maxCurrentScore = Math.max(...entries.map(([_, j]) => j.position || 0));
 
-    const positionsMap = {};
-    entries.forEach(([pKey, jData]) => {
-      positionsMap[pKey] = Math.min(Math.max((jData.position / MAX_THEORETICAL_POINTS) * 82 + 2, 2), 85);
-    });
-
-    // Rendu des liens de cristal entre parieur et cible
-    entries.forEach(([pKey, jData]) => {
-      if (jData.targetBet && positionsMap[jData.targetBet] !== undefined) {
-        const p1 = positionsMap[pKey];
-        const p2 = positionsMap[jData.targetBet];
-        const leftPos = Math.min(p1, p2);
-        const width = Math.abs(p2 - p1);
-
-        const crystalLink = document.createElement('div');
-        crystalLink.className = 'crystal-link';
-        crystalLink.style.left = `calc(${leftPos}% + 25px)`;
-        crystalLink.style.width = `calc(${width}%)`;
-        trackContainer.appendChild(crystalLink);
-      }
-    });
-
     entries.forEach(([pKey, jData], index) => {
       const avatarInfo = AVATARS.find(a => a.id === jData.avatar) || AVATARS[0];
       const lane = document.createElement('div');
       lane.className = `lane-v2 lane-color-${index % 6}`;
 
-      const progressPct = positionsMap[pKey];
+      const progressPct = Math.min(Math.max((jData.position / MAX_THEORETICAL_POINTS) * 82 + 2, 2), 85);
 
       const isLeader = (jData.position > 0 && jData.position === maxCurrentScore);
       const isFastest = (firstCorrectKey === pKey);
@@ -1473,7 +1427,6 @@
     });
   }
 
-  // 6. INTERFACE MOBILES
   function setPlayerRisk(isRisk) {
     playerRiskChoice = isRisk;
     document.getElementById('btn-risk-off').className = isRisk ? "btn btn-small btn-secondary" : "btn btn-small btn-warning";
@@ -1692,7 +1645,6 @@
       }
     }
 
-    // Calcul des points du pari sur l'adversaire (+3 pts si réussi)
     if (sessionData.isBetMode) {
       if (betSuccess) {
         deltaPoints += 3;
@@ -1733,7 +1685,6 @@
     });
   }
 
-  // 7. ÉCRAN FIN ET GESTION DU CLASSEMENT / PODIUM
   function showEndScreen(joueursObj) {
     localStorage.removeItem('race_sessionCode');
     showScreen('screen-end');
