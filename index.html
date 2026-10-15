@@ -727,7 +727,6 @@
         <div>
           <button id="btn-start-game" class="btn btn-warning" onclick="startFirstQuestion()">🚀 Lancer la 1ère Question</button>
           
-          <!-- BOUTONS QUESTION SUIVANTE & PAUSE -->
           <div id="animator-nav-controls" style="display:none; gap: 8px;">
             <button id="btn-next-q" class="btn btn-secondary" onclick="forceNextQuestion()" style="flex: 1; margin:0;">Question Suivante ➔</button>
             <button id="btn-pause-game" class="btn btn-info btn-small" onclick="togglePauseGame()" style="width: auto; margin:0; font-weight:bold;">⏸️ Pause</button>
@@ -1294,11 +1293,9 @@
         optionsList.appendChild(li);
       });
 
-      // PASSAGE AUTOMATIQUE BLOQUÉ SI LA PARTIE EST EN PAUSE
       if (allHaveAnswered && !sessionData.autoSwitching && !sessionData.isPaused) {
         db.ref(`courses/${currentSessionId}`).update({ autoSwitching: true });
         setTimeout(() => { 
-          // Re-vérifier l'état de la pause au moment du déclenchement du timer
           db.ref(`courses/${currentSessionId}/isPaused`).once('value', snap => {
             if (!snap.val()) {
               forceNextQuestion();
@@ -1496,24 +1493,6 @@
         avatarEl.src = avatarInfo.img;
         avatarEl.style.display = 'block';
       }
-
-      const turboZone = document.getElementById('turbo-selector-zone');
-      const turboBtn = document.getElementById('btn-turbo-boost');
-      const currentCount = currentPlayer.turboCount !== undefined ? currentPlayer.turboCount : 0;
-
-      if (currentCount > 0) {
-        turboZone.style.display = 'block';
-        if (!hasAnsweredCurrentQuestion) {
-          turboBtn.disabled = false;
-          if (!playerTurboActive) {
-            turboBtn.innerText = `⚡ Activer Turbo-Boost (${currentCount} en stock)`;
-          }
-        }
-      } else {
-        if (!playerTurboActive) {
-          turboZone.style.display = 'none';
-        }
-      }
     }
 
     const qIndex = sessionData.currentQuestion;
@@ -1533,22 +1512,32 @@
     document.getElementById('q-text').innerText = q.text;
 
     const riskZone = document.getElementById('risk-selector-zone');
+    const turboZone = document.getElementById('turbo-selector-zone');
     const container = document.getElementById('answers-container');
 
     if (container.dataset.qIndex != qIndex) {
       hasAnsweredCurrentQuestion = false;
       playerRiskChoice = false;
-      playerTurboActive = false;
+      playerTurboActive = false; // CORRECTION : Réinitialisation stricte de l'état local du turbo pour la nouvelle question
       setPlayerRisk(false);
-
-      const turboBtn = document.getElementById('btn-turbo-boost');
-      turboBtn.classList.remove('active-turbo');
 
       container.dataset.qIndex = qIndex;
       document.getElementById('feedback-msg').innerText = '';
       container.innerHTML = '';
 
       if (riskTimerInterval) clearInterval(riskTimerInterval);
+
+      // Récupération et affichage du stock réel de l'utilisateur pour la question
+      db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).once('value', snap => {
+        const pData = snap.val() || {};
+        const count = pData.turboCount !== undefined ? pData.turboCount : 0;
+        const turboBtn = document.getElementById('btn-turbo-boost');
+        
+        turboBtn.classList.remove('active-turbo');
+        turboBtn.disabled = (count <= 0);
+        turboBtn.innerText = count > 0 ? `⚡ Activer Turbo-Boost (${count} en stock)` : `⚡ Activer Turbo-Boost (0 en stock)`;
+        turboZone.style.display = (count > 0) ? 'block' : 'none';
+      });
 
       if (sessionData.isDoubleRisk) {
         riskZone.style.display = 'block';
