@@ -277,7 +277,6 @@
       to { transform: scale(1.2); }
     }
 
-    /* TURBO-BOOST ANIMATION ET BADGE (ÉLÉCTRIQUE VIOLET) */
     .turbo-badge {
       position: absolute;
       z-index: 4;
@@ -708,6 +707,10 @@
             🎲 Quitte ou Double : OFF
           </button>
 
+          <button class="btn btn-turbo btn-small" style="width:100%; margin:6px 0; font-weight:bold;" onclick="animatorGiveTurboToAll()">
+            ⚡ Distribuer +1 Turbo à tous
+          </button>
+
           <div style="margin: 8px 0; font-size:0.85rem;">
             <strong>Joueurs (<span id="count-connected">0</span>/6) :</strong>
             <div id="connected-players-list" style="margin-top:4px;">En attente...</div>
@@ -723,7 +726,12 @@
 
         <div>
           <button id="btn-start-game" class="btn btn-warning" onclick="startFirstQuestion()">🚀 Lancer la 1ère Question</button>
-          <button id="btn-next-q" class="btn btn-secondary" onclick="forceNextQuestion()" style="display:none;">Question Suivante ➔</button>
+          
+          <!-- BOUTONS QUESTION SUIVANTE & PAUSE -->
+          <div id="animator-nav-controls" style="display:none; gap: 8px;">
+            <button id="btn-next-q" class="btn btn-secondary" onclick="forceNextQuestion()" style="flex: 1; margin:0;">Question Suivante ➔</button>
+            <button id="btn-pause-game" class="btn btn-info btn-small" onclick="togglePauseGame()" style="width: auto; margin:0; font-weight:bold;">⏸️ Pause</button>
+          </div>
         </div>
       </div>
 
@@ -763,9 +771,9 @@
       </div>
 
       <!-- SÉLECTEUR TURBO-BOOST -->
-      <div id="turbo-selector-zone" style="margin-bottom: 8px;">
+      <div id="turbo-selector-zone" style="margin-bottom: 8px; display:none;">
         <button id="btn-turbo-boost" class="btn btn-turbo btn-small" style="width: 100%; font-weight: bold;" onclick="togglePlayerTurbo()">
-          ⚡ Activer Turbo-Boost (2 restants)
+          ⚡ Activer Turbo-Boost (0 en stock)
         </button>
       </div>
 
@@ -961,6 +969,7 @@
       modifiersEnabled: false,
       isDoubleRisk: false,
       pendingDoubleRisk: false,
+      isPaused: false,
       activeModifiers: {}
     }).then(() => {
       listenToCourse();
@@ -984,6 +993,27 @@
     db.ref(`courses/${currentSessionId}`).update({
       isDoubleRisk: newState,
       pendingDoubleRisk: newState
+    });
+  }
+
+  function togglePauseGame() {
+    if (!currentSessionId || !isAnimator) return;
+    const newPauseState = !sessionData.isPaused;
+    db.ref(`courses/${currentSessionId}`).update({
+      isPaused: newPauseState
+    });
+  }
+
+  function animatorGiveTurboToAll() {
+    if (!currentSessionId || !isAnimator) return;
+    db.ref(`courses/${currentSessionId}/joueurs`).once('value', snapshot => {
+      const joueurs = snapshot.val() || {};
+      const updates = {};
+      Object.keys(joueurs).forEach(pKey => {
+        const currentCount = joueurs[pKey].turboCount !== undefined ? joueurs[pKey].turboCount : 0;
+        updates[`${pKey}/turboCount`] = currentCount + 1;
+      });
+      db.ref(`courses/${currentSessionId}/joueurs`).update(updates);
     });
   }
 
@@ -1107,7 +1137,7 @@
         position: 0,
         hasAnswered: false,
         riskTaken: false,
-        turboCount: 2,
+        turboCount: 0,
         turboActive: false
       };
 
@@ -1187,14 +1217,24 @@
       btnRisk.innerText = "🎲 Quitte ou Double : OFF";
     }
 
+    const btnPause = document.getElementById('btn-pause-game');
+    if (sessionData.isPaused) {
+      btnPause.className = "btn btn-warning btn-small";
+      btnPause.innerText = "▶ Reprendre";
+    } else {
+      btnPause.className = "btn btn-info btn-small";
+      btnPause.innerText = "⏸️ Pause";
+    }
+
     listEl.innerHTML = entries.map(([pKey, j]) => {
       const isAnswered = j.hasAnswered === true;
       const statusClass = isAnswered ? 'status-answered' : 'status-waiting';
       const statusIcon = isAnswered ? '✓' : '⌛';
+      const tCount = j.turboCount !== undefined ? j.turboCount : 0;
 
       return `
         <span class="player-badge ${statusClass}">
-          <span>${statusIcon} ${j.name}</span>
+          <span>${statusIcon} ${j.name} (⚡${tCount})</span>
           <button class="btn-delete-player" onclick="removePlayer('${pKey}')" title="Supprimer ce joueur">✕</button>
         </span>
       `;
@@ -1206,7 +1246,7 @@
     if (qIndex >= 0 && qIndex < QUESTIONS.length) {
       document.getElementById('animator-q-count').innerText = `Question ${qIndex + 1} / ${QUESTIONS.length}`;
       document.getElementById('btn-start-game').style.display = 'none';
-      document.getElementById('btn-next-q').style.display = 'block';
+      document.getElementById('animator-nav-controls').style.display = 'flex';
 
       const totalConnected = entries.length;
       const totalAnswers = sessionData.answersCount || 0;
@@ -1216,8 +1256,10 @@
       qBox.style.display = 'block';
 
       const currentQ = QUESTIONS[qIndex];
-      const riskPrefix = sessionData.isDoubleRisk ? "🎲 [QUITTE OU DOUBLE] " : "";
-      document.getElementById('animator-q-title').innerText = `${riskPrefix}${qIndex + 1}. ${currentQ.text}`;
+      let prefix = sessionData.isDoubleRisk ? "🎲 [QUITTE OU DOUBLE] " : "";
+      if (sessionData.isPaused) prefix += "⏸️ [EN PAUSE] ";
+      
+      document.getElementById('animator-q-title').innerText = `${prefix}${qIndex + 1}. ${currentQ.text}`;
 
       const optionsList = document.getElementById('animator-options-list');
       optionsList.innerHTML = '';
@@ -1252,12 +1294,23 @@
         optionsList.appendChild(li);
       });
 
-      if (allHaveAnswered && !sessionData.autoSwitching) {
+      // PASSAGE AUTOMATIQUE BLOQUÉ SI LA PARTIE EST EN PAUSE
+      if (allHaveAnswered && !sessionData.autoSwitching && !sessionData.isPaused) {
         db.ref(`courses/${currentSessionId}`).update({ autoSwitching: true });
-        setTimeout(() => { forceNextQuestion(); }, 3000);
+        setTimeout(() => { 
+          // Re-vérifier l'état de la pause au moment du déclenchement du timer
+          db.ref(`courses/${currentSessionId}/isPaused`).once('value', snap => {
+            if (!snap.val()) {
+              forceNextQuestion();
+            } else {
+              db.ref(`courses/${currentSessionId}`).update({ autoSwitching: false });
+            }
+          });
+        }, 3000);
       }
     } else {
       document.getElementById('animator-q-box').style.display = 'none';
+      document.getElementById('animator-nav-controls').style.display = 'none';
     }
   }
 
@@ -1284,6 +1337,7 @@
         answersCount: 0,
         autoSwitching: false,
         isDoubleRisk: actualDoubleRisk,
+        isPaused: false,
         activeModifiers: newModifiers
       });
     });
@@ -1316,6 +1370,7 @@
           answersCount: 0,
           autoSwitching: false,
           isDoubleRisk: actualDoubleRisk,
+          isPaused: false,
           activeModifiers: newModifiers
         });
       }
@@ -1406,13 +1461,12 @@
   function togglePlayerTurbo() {
     if (hasAnsweredCurrentQuestion) return;
     
-    // Vérifier combien de turbos il reste au joueur
     db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).once('value', snap => {
       const pData = snap.val() || {};
-      const currentCount = pData.turboCount !== undefined ? pData.turboCount : 2;
+      const currentCount = pData.turboCount !== undefined ? pData.turboCount : 0;
 
       if (!playerTurboActive && currentCount <= 0) {
-        alert("Vous n'avez plus de Turbo-Boost disponible !");
+        alert("Vous n'avez pas de Turbo-Boost en stock !");
         return;
       }
 
@@ -1421,10 +1475,10 @@
 
       if (playerTurboActive) {
         btn.classList.add('active-turbo');
-        btn.innerText = `⚡ Turbo-Boost ACTIVÉ ! (${currentCount} restants)`;
+        btn.innerText = `⚡ Turbo-Boost ACTIVÉ ! (${currentCount} en stock)`;
       } else {
         btn.classList.remove('active-turbo');
-        btn.innerText = `⚡ Activer Turbo-Boost (${currentCount} restants)`;
+        btn.innerText = `⚡ Activer Turbo-Boost (${currentCount} en stock)`;
       }
     });
   }
@@ -1441,6 +1495,24 @@
       if (avatarEl) {
         avatarEl.src = avatarInfo.img;
         avatarEl.style.display = 'block';
+      }
+
+      const turboZone = document.getElementById('turbo-selector-zone');
+      const turboBtn = document.getElementById('btn-turbo-boost');
+      const currentCount = currentPlayer.turboCount !== undefined ? currentPlayer.turboCount : 0;
+
+      if (currentCount > 0) {
+        turboZone.style.display = 'block';
+        if (!hasAnsweredCurrentQuestion) {
+          turboBtn.disabled = false;
+          if (!playerTurboActive) {
+            turboBtn.innerText = `⚡ Activer Turbo-Boost (${currentCount} en stock)`;
+          }
+        }
+      } else {
+        if (!playerTurboActive) {
+          turboZone.style.display = 'none';
+        }
       }
     }
 
@@ -1461,7 +1533,6 @@
     document.getElementById('q-text').innerText = q.text;
 
     const riskZone = document.getElementById('risk-selector-zone');
-    const turboZone = document.getElementById('turbo-selector-zone');
     const container = document.getElementById('answers-container');
 
     if (container.dataset.qIndex != qIndex) {
@@ -1470,16 +1541,8 @@
       playerTurboActive = false;
       setPlayerRisk(false);
 
-      // Réinitialiser le bouton turbo
-      db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).once('value', snap => {
-        const pData = snap.val() || {};
-        const count = pData.turboCount !== undefined ? pData.turboCount : 2;
-        const turboBtn = document.getElementById('btn-turbo-boost');
-        turboBtn.classList.remove('active-turbo');
-        turboBtn.disabled = (count <= 0);
-        turboBtn.innerText = count > 0 ? `⚡ Activer Turbo-Boost (${count} restants)` : `⚡ Turbo-Boost épuisés (0)`;
-        turboZone.style.display = (count > 0) ? 'block' : 'none';
-      });
+      const turboBtn = document.getElementById('btn-turbo-boost');
+      turboBtn.classList.remove('active-turbo');
 
       container.dataset.qIndex = qIndex;
       document.getElementById('feedback-msg').innerText = '';
@@ -1560,7 +1623,7 @@
 
     db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).once('value', snap => {
       const pData = snap.val() || {};
-      let currentTurboCount = pData.turboCount !== undefined ? pData.turboCount : 2;
+      let currentTurboCount = pData.turboCount !== undefined ? pData.turboCount : 0;
       let newTurboCount = currentTurboCount;
 
       if (playerTurboActive && currentTurboCount > 0) {
@@ -1610,7 +1673,7 @@
           let basePoints = isFirst ? 2 : 1;
 
           if (playerTurboActive) {
-            basePoints *= 2; // Double les points avec le Turbo-Boost !
+            basePoints *= 2;
           }
 
           deltaPoints = basePoints;
