@@ -772,7 +772,7 @@
       <!-- SÉLECTEUR TURBO-BOOST & SABOTAGE -->
       <div id="turbo-selector-zone" style="margin-bottom: 8px; display:none;">
         <button id="btn-turbo-boost" class="btn btn-turbo btn-small" style="width: 100%; font-weight: bold;" onclick="togglePlayerTurboMenu()">
-          ⚡ Activer Turbo-Boost (0 en stock)
+          ⚡ Activer Turbo-Boost
         </button>
         <div id="turbo-options-panel" style="display:none; background:#2e1a47; border:2px solid var(--turbo); border-radius:10px; padding:10px; margin-top:6px;">
           <div style="font-size:0.8rem; font-weight:bold; color:#da70d6; margin-bottom:6px; text-align:center;">Choisissez l'action du Turbo :</div>
@@ -897,7 +897,7 @@
   let reviewQuestionIndex = 0;
   let playerRiskChoice = false;
   let playerTurboActive = false;
-  let playerTurboMode = 'boost'; // 'boost' ou 'sabotage'
+  let playerTurboMode = 'boost';
   let playerSabotageTarget = null;
   let riskTimerInterval = null;
 
@@ -962,7 +962,7 @@
     }
 
     if (!QUESTIONS || !Array.isArray(QUESTIONS) || QUESTIONS.length === 0) {
-      alert("Erreur : Aucun fichier questions.json trouvé ! Veuillez sélectionner le fichier avec le bouton prévu à cet effet.");
+      alert("Erreur : Aucun fichier questions.json trouvé !");
       return;
     }
 
@@ -1316,7 +1316,6 @@
     document.getElementById('btn-risk-on').className = isRisk ? "btn btn-small btn-danger" : "btn btn-small btn-secondary";
   }
 
-  // GESTION DU MENU TURBO & SABOTAGE MOBILE
   function togglePlayerTurboMenu() {
     if (hasAnsweredCurrentQuestion) return;
     const panel = document.getElementById('turbo-options-panel');
@@ -1339,7 +1338,6 @@
         btn.innerText = `⚡ Boost ACTIVÉ (${count} en stock)`;
       });
     } else if (mode === 'sabotage') {
-      // Afficher la liste des cibles adverses
       const targetsList = document.getElementById('sabotage-targets-list');
       targetsList.innerHTML = '';
       const joueurs = sessionData.joueurs || {};
@@ -1359,7 +1357,7 @@
       });
 
       if (!hasTargets) {
-        alert("Aucun adversaire à saboter pour l'instant !");
+        alert("Aucun adversaire à saboter !");
       } else {
         document.getElementById('sabotage-targets-panel').style.display = 'block';
       }
@@ -1388,14 +1386,19 @@
       const turboBtn = document.getElementById('btn-turbo-boost');
       const currentCount = currentPlayer.turboCount !== undefined ? currentPlayer.turboCount : 0;
 
+      // CORRECTION 1 : Mise à jour dynamique immédiate et propre du stock et du bouton
       if (currentCount > 0) {
         turboZone.style.display = 'block';
         if (!hasAnsweredCurrentQuestion) {
           turboBtn.disabled = false;
-          if (!playerTurboActive) turboBtn.innerText = `⚡ Activer Turbo-Boost (${currentCount} en stock)`;
+          if (!playerTurboActive) {
+            turboBtn.innerText = `⚡ Activer Turbo-Boost (${currentCount} en stock)`;
+          }
         }
       } else {
-        if (!playerTurboActive) turboZone.style.display = 'none';
+        turboZone.style.display = 'none';
+        playerTurboActive = false;
+        playerSabotageTarget = null;
       }
     }
 
@@ -1422,7 +1425,7 @@
       hasAnsweredCurrentQuestion = false;
       playerRiskChoice = false;
       playerTurboActive = false;
-      playerSabotageTarget = null;
+      playerSabotageTarget = null; // CORRECTION 2 : Purge stricte de la cible au changement de question
       setPlayerRisk(false);
 
       const turboBtn = document.getElementById('btn-turbo-boost');
@@ -1506,7 +1509,6 @@
       if (playerTurboActive && currentTurboCount > 0) newTurboCount -= 1;
       else playerTurboActive = false;
 
-      // Enregistrer la réponse du joueur
       db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({
         hasAnswered: true, lastAnswer: chosenIdx, riskTaken: playerRiskChoice,
         turboActive: playerTurboActive && (playerTurboMode === 'boost'),
@@ -1514,7 +1516,6 @@
       });
       db.ref(`courses/${currentSessionId}/answersCount`).transaction(c => (c || 0) + 1);
 
-      // Traitement du Sabotage si actif
       if (playerTurboActive && playerTurboMode === 'sabotage' && playerSabotageTarget) {
         db.ref(`courses/${currentSessionId}/joueurs/${playerSabotageTarget}`).once('value', targetSnap => {
           const targetData = targetSnap.val();
@@ -1530,7 +1531,6 @@
         });
       }
 
-      // Calcul des points
       let deltaPoints = 0;
       let bonusText = "";
 
@@ -1656,7 +1656,7 @@
     const panel = document.getElementById('podium-panel');
     const btn = document.getElementById('btn-show-podium');
     panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    btn.innerText = panel.style.display === 'none' ? '🥇 Afficher le Podium' : '🥇 Masquer le Podium';
+    btn.innerText = panel.style.display === 'none' ? '🥇 Masquer le Podium' : '🥇 Afficher le Podium';
   }
 
   function buildLeaderboard(joueursArr) {
@@ -1684,14 +1684,14 @@
     const panel = document.getElementById('leaderboard-panel');
     const btn = document.getElementById('btn-show-leaderboard');
     panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    btn.innerText = panel.style.display === 'none' ? '📊 Afficher le Classement' : '📊 Masquer le Classement';
+    btn.innerText = panel.style.display === 'none' ? '📊 Masquer le Classement' : '📊 Afficher le Classement';
   }
 
   function toggleReview() {
     const panel = document.getElementById('review-panel');
     const btn = document.getElementById('btn-show-review');
     panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    btn.innerText = panel.style.display === 'none' ? '🔍 Revoir toutes les questions' : '🔍 Masquer la révision';
+    btn.innerText = panel.style.display === 'none' ? '🔍 Masquer la révision' : '🔍 Revoir toutes les questions';
     if (panel.style.display === 'block') { reviewQuestionIndex = 0; renderReviewQuestion(); }
   }
 
