@@ -769,11 +769,20 @@
         <p id="q-text" style="font-size:1.05rem; margin-top:6px; font-weight:600;"></p>
       </div>
 
-      <!-- SÉLECTEUR TURBO-BOOST -->
+      <!-- SÉLECTEUR TURBO-BOOST & SABOTAGE -->
       <div id="turbo-selector-zone" style="margin-bottom: 8px; display:none;">
-        <button id="btn-turbo-boost" class="btn btn-turbo btn-small" style="width: 100%; font-weight: bold;" onclick="togglePlayerTurbo()">
+        <button id="btn-turbo-boost" class="btn btn-turbo btn-small" style="width: 100%; font-weight: bold;" onclick="togglePlayerTurboMenu()">
           ⚡ Activer Turbo-Boost (0 en stock)
         </button>
+        <div id="turbo-options-panel" style="display:none; background:#2e1a47; border:2px solid var(--turbo); border-radius:10px; padding:10px; margin-top:6px;">
+          <div style="font-size:0.8rem; font-weight:bold; color:#da70d6; margin-bottom:6px; text-align:center;">Choisissez l'action du Turbo :</div>
+          <button class="btn btn-small btn-turbo" style="width:100%; margin-bottom:4px;" onclick="selectTurboMode('boost')">🚀 Mode Boost (Doubler mes points)</button>
+          <button class="btn btn-small btn-danger" style="width:100%; margin:0;" onclick="selectTurboMode('sabotage')">🍌 Mode Sabotage (Viser un adversaire)</button>
+        </div>
+        <div id="sabotage-targets-panel" style="display:none; background:#3a1c1c; border:2px solid var(--danger); border-radius:10px; padding:10px; margin-top:6px;">
+          <div style="font-size:0.8rem; font-weight:bold; color:#ff9999; margin-bottom:6px; text-align:center;">🎯 Ciblez votre victime :</div>
+          <div id="sabotage-targets-list" style="display:flex; flex-direction:column; gap:4px;"></div>
+        </div>
       </div>
 
       <!-- SÉLECTEUR QUITTE OU DOUBLE -->
@@ -840,7 +849,6 @@
 </div>
 
 <script>
-  // CONFIGURATION FIREBASE
   const firebaseConfig = {
     apiKey: "AIzaSyCAz1_Ko1zNmW40sbtaOjnGpGh-P_7aBKw",
     authDomain: "dilemme-du-prisonnier.firebaseapp.com",
@@ -860,7 +868,7 @@
         navigator.vibrate(pattern);
       }
     } catch (e) {
-      console.warn("Vibration non supportée sur cet appareil ou bloquée par le navigateur.", e);
+      console.warn("Vibration non supportée sur cet appareil.", e);
     }
   }
 
@@ -889,6 +897,8 @@
   let reviewQuestionIndex = 0;
   let playerRiskChoice = false;
   let playerTurboActive = false;
+  let playerTurboMode = 'boost'; // 'boost' ou 'sabotage'
+  let playerSabotageTarget = null;
   let riskTimerInterval = null;
 
   function showScreen(id) {
@@ -980,27 +990,18 @@
 
   function toggleModifiers() {
     if (!currentSessionId || !isAnimator) return;
-    const newState = !sessionData.modifiersEnabled;
-    db.ref(`courses/${currentSessionId}`).update({
-      modifiersEnabled: newState
-    });
+    db.ref(`courses/${currentSessionId}`).update({ modifiersEnabled: !sessionData.modifiersEnabled });
   }
 
   function toggleDoubleRisk() {
     if (!currentSessionId || !isAnimator) return;
     const newState = !sessionData.isDoubleRisk;
-    db.ref(`courses/${currentSessionId}`).update({
-      isDoubleRisk: newState,
-      pendingDoubleRisk: newState
-    });
+    db.ref(`courses/${currentSessionId}`).update({ isDoubleRisk: newState, pendingDoubleRisk: newState });
   }
 
   function togglePauseGame() {
     if (!currentSessionId || !isAnimator) return;
-    const newPauseState = !sessionData.isPaused;
-    db.ref(`courses/${currentSessionId}`).update({
-      isPaused: newPauseState
-    });
+    db.ref(`courses/${currentSessionId}`).update({ isPaused: !sessionData.isPaused });
   }
 
   function animatorGiveTurboToAll() {
@@ -1027,18 +1028,13 @@
     const secondScore = scores.length > 1 ? scores[1] : null;
 
     const leaders = entries.filter(([_, j]) => (j.position || 0) === topScore).map(([pKey]) => pKey);
-    const secondPlace = secondScore !== null 
-      ? entries.filter(([_, j]) => (j.position || 0) === secondScore).map(([pKey]) => pKey) 
-      : [];
-
+    const secondPlace = secondScore !== null ? entries.filter(([_, j]) => (j.position || 0) === secondScore).map(([pKey]) => pKey) : [];
     const nonLeaders = entries.filter(([pKey]) => !leaders.includes(pKey)).map(([pKey]) => pKey);
     const malusCandidates = Array.from(new Set([...leaders, ...secondPlace]));
 
     const modifiers = {};
-
     let bananaTarget = null;
-    const bananaRoll = Math.random(); 
-    if (bananaRoll > 0.33 && malusCandidates.length > 0) {
+    if (Math.random() > 0.33 && malusCandidates.length > 0) {
       bananaTarget = malusCandidates[Math.floor(Math.random() * malusCandidates.length)];
       modifiers[bananaTarget] = 'banana';
     }
@@ -1065,27 +1061,19 @@
     selectedAvatarId = null;
 
     db.ref(`courses/${code}`).once('value').then(snapshot => {
-      const data = snapshot.val();
-      if (!data) {
-        alert("Session introuvable. Demandez le code à l'animateur.");
-        return;
-      }
-
+      if (!snapshot.val()) { alert("Session introuvable."); return; }
       document.getElementById('avatar-section').style.display = 'block';
-
       db.ref(`courses/${code}/joueurs`).off();
       db.ref(`courses/${code}/joueurs`).on('value', snapJoueurs => {
         renderAvatarSelector(snapJoueurs.val() || {});
       });
-    }).catch(err => {
-      alert("Erreur de connexion : " + err.message);
     });
   }
 
   function renderAvatarSelector(joueurs) {
     const takenAvatars = Object.entries(joueurs)
-      .filter(([pKey, jData]) => pKey !== playerId)
-      .map(([pKey, jData]) => jData.avatar);
+      .filter(([pKey]) => pKey !== playerId)
+      .map(([_, jData]) => jData.avatar);
 
     const container = document.getElementById('avatar-selector');
     container.innerHTML = '';
@@ -1093,7 +1081,6 @@
     AVATARS.forEach(av => {
       const isTaken = takenAvatars.includes(av.id);
       const isSelected = (selectedAvatarId === av.id);
-
       const card = document.createElement('div');
       card.className = `avatar-card ${isSelected ? 'selected' : ''} ${isTaken ? 'disabled' : ''}`;
       card.innerHTML = `
@@ -1101,12 +1088,8 @@
         <div style="font-size:0.75rem; font-weight:bold;">${av.name}</div>
         ${isTaken ? '<div class="taken-tag">Occupé</div>' : ''}
       `;
-
       if (!isTaken) {
-        card.onclick = () => {
-          selectedAvatarId = av.id;
-          renderAvatarSelector(joueurs);
-        };
+        card.onclick = () => { selectedAvatarId = av.id; renderAvatarSelector(joueurs); };
       }
       container.appendChild(card);
     });
@@ -1114,39 +1097,21 @@
 
   function joinGame() {
     const name = document.getElementById('input-player-name').value.trim();
-    if (!name) { alert("Saisissez votre nom ou votre équipe."); return; }
+    if (!name) { alert("Saisissez votre nom."); return; }
     if (!selectedAvatarId) { alert("Sélectionnez un avatar."); return; }
 
-    const joueursRef = db.ref(`courses/${currentSessionId}/joueurs`);
-
-    joueursRef.transaction((joueurs) => {
+    db.ref(`courses/${currentSessionId}/joueurs`).transaction((joueurs) => {
       joueurs = joueurs || {};
-      
-      const isTaken = Object.entries(joueurs).some(
-        ([pKey, jData]) => pKey !== playerId && jData.avatar === selectedAvatarId
-      );
-
-      if (isTaken) {
-        return;
-      }
-
+      const isTaken = Object.entries(joueurs).some(([pKey, jData]) => pKey !== playerId && jData.avatar === selectedAvatarId);
+      if (isTaken) return;
       joueurs[playerId] = {
-        name: name,
-        avatar: selectedAvatarId,
-        position: 0,
-        hasAnswered: false,
-        riskTaken: false,
-        turboCount: 0,
-        turboActive: false
+        name: name, avatar: selectedAvatarId, position: 0,
+        hasAnswered: false, riskTaken: false, turboCount: 0, turboActive: false
       };
-
       return joueurs;
     }, (error, committed) => {
-      if (error) {
-        alert("Erreur de connexion : " + error.message);
-      } else if (!committed) {
-        alert("Cette mascotte vient d'être choisie par un autre joueur !");
-      } else {
+      if (error || !committed) alert("Erreur ou avatar déjà pris !");
+      else {
         localStorage.setItem('race_sessionCode', currentSessionId);
         listenToCourse();
         showScreen('screen-player');
@@ -1156,7 +1121,6 @@
 
   function listenToCourse() {
     if (!currentSessionId) return;
-
     if (isAnimator) document.getElementById('animator-session-id').innerText = "CODE: " + currentSessionId;
     else document.getElementById('player-session-id').innerText = "CODE: " + currentSessionId;
 
@@ -1165,8 +1129,8 @@
       sessionData = snapshot.val() || {};
       const joueurs = sessionData.joueurs || {};
 
-      if (!isAnimator && sessionData && (!joueurs || !joueurs[playerId])) {
-        alert("Vous avez été retiré de la partie par l'animateur.");
+      if (!isAnimator && (!joueurs || !joueurs[playerId])) {
+        alert("Vous avez été retiré de la partie.");
         leaveSession();
         return;
       }
@@ -1175,66 +1139,40 @@
         QUESTIONS = sessionData.questions;
       }
 
-      if (isAnimator) {
-        updateAnimatorUI(joueurs);
-      } else {
-        updatePlayerUI();
-      }
+      if (isAnimator) updateAnimatorUI(joueurs);
+      else updatePlayerUI();
 
-      if (sessionData.status === 'finished') {
-        showEndScreen(joueurs);
-      }
+      if (sessionData.status === 'finished') showEndScreen(joueurs);
     });
   }
 
   function removePlayer(pKey) {
-    if (!currentSessionId || !pKey) return;
-    db.ref(`courses/${currentSessionId}/joueurs/${pKey}`).remove();
+    if (currentSessionId && pKey) db.ref(`courses/${currentSessionId}/joueurs/${pKey}`).remove();
   }
 
   function updateAnimatorUI(joueurs) {
     const listEl = document.getElementById('connected-players-list');
     const entries = Object.entries(joueurs);
-
     document.getElementById('count-connected').innerText = entries.length;
 
     const btnModifiers = document.getElementById('btn-toggle-modifiers');
-    if (sessionData.modifiersEnabled) {
-      btnModifiers.className = "btn btn-info btn-small";
-      btnModifiers.innerText = "🍄 Modificateurs (Bonus/Malus) : ON";
-    } else {
-      btnModifiers.className = "btn btn-secondary btn-small";
-      btnModifiers.innerText = "🍄 Modificateurs (Bonus/Malus) : OFF";
-    }
+    btnModifiers.className = sessionData.modifiersEnabled ? "btn btn-info btn-small" : "btn btn-secondary btn-small";
+    btnModifiers.innerText = sessionData.modifiersEnabled ? "🍄 Modificateurs : ON" : "🍄 Modificateurs : OFF";
 
     const btnRisk = document.getElementById('btn-toggle-risk');
-    if (sessionData.isDoubleRisk) {
-      btnRisk.className = "btn btn-warning btn-small";
-      btnRisk.innerText = "🎲 Quitte ou Double : ON";
-    } else {
-      btnRisk.className = "btn btn-secondary btn-small";
-      btnRisk.innerText = "🎲 Quitte ou Double : OFF";
-    }
+    btnRisk.className = sessionData.isDoubleRisk ? "btn btn-warning btn-small" : "btn btn-secondary btn-small";
+    btnRisk.innerText = sessionData.isDoubleRisk ? "🎲 Quitte ou Double : ON" : "🎲 Quitte ou Double : OFF";
 
     const btnPause = document.getElementById('btn-pause-game');
-    if (sessionData.isPaused) {
-      btnPause.className = "btn btn-warning btn-small";
-      btnPause.innerText = "▶ Reprendre";
-    } else {
-      btnPause.className = "btn btn-info btn-small";
-      btnPause.innerText = "⏸️ Pause";
-    }
+    btnPause.className = sessionData.isPaused ? "btn btn-warning btn-small" : "btn btn-info btn-small";
+    btnPause.innerText = sessionData.isPaused ? "▶ Reprendre" : "⏸️ Pause";
 
     listEl.innerHTML = entries.map(([pKey, j]) => {
       const isAnswered = j.hasAnswered === true;
-      const statusClass = isAnswered ? 'status-answered' : 'status-waiting';
-      const statusIcon = isAnswered ? '✓' : '⌛';
-      const tCount = j.turboCount !== undefined ? j.turboCount : 0;
-
       return `
-        <span class="player-badge ${statusClass}">
-          <span>${statusIcon} ${j.name} (⚡${tCount})</span>
-          <button class="btn-delete-player" onclick="removePlayer('${pKey}')" title="Supprimer ce joueur">✕</button>
+        <span class="player-badge ${isAnswered ? 'status-answered' : 'status-waiting'}">
+          <span>${isAnswered ? '✓' : '⌛'} ${j.name} (⚡${j.turboCount || 0})</span>
+          <button class="btn-delete-player" onclick="removePlayer('${pKey}')">✕</button>
         </span>
       `;
     }).join('') || 'Aucun participant';
@@ -1251,57 +1189,42 @@
       const totalAnswers = sessionData.answersCount || 0;
       document.getElementById('answers-tracker').innerText = `Réponses : ${totalAnswers} / ${totalConnected}`;
 
-      const qBox = document.getElementById('animator-q-box');
-      qBox.style.display = 'block';
-
+      document.getElementById('animator-q-box').style.display = 'block';
       const currentQ = QUESTIONS[qIndex];
       let prefix = sessionData.isDoubleRisk ? "🎲 [QUITTE OU DOUBLE] " : "";
       if (sessionData.isPaused) prefix += "⏸️ [EN PAUSE] ";
-      
       document.getElementById('animator-q-title').innerText = `${prefix}${qIndex + 1}. ${currentQ.text}`;
 
       const optionsList = document.getElementById('animator-options-list');
       optionsList.innerHTML = '';
-
       const allHaveAnswered = (totalConnected > 0 && totalAnswers >= totalConnected);
 
       const voteCounts = {};
       if (allHaveAnswered) {
         entries.forEach(([_, j]) => {
-          if (j.lastAnswer !== undefined && j.lastAnswer !== null) {
-            voteCounts[j.lastAnswer] = (voteCounts[j.lastAnswer] || 0) + 1;
-          }
+          if (j.lastAnswer !== undefined && j.lastAnswer !== null) voteCounts[j.lastAnswer] = (voteCounts[j.lastAnswer] || 0) + 1;
         });
       }
 
       currentQ.options.forEach((opt, idx) => {
         const li = document.createElement('li');
         li.className = 'animator-option-item';
-
-        const count = voteCounts[idx] || 0;
-        const countBadge = allHaveAnswered 
-          ? `<span class="animator-vote-count">${count} vote${count > 1 ? 's' : ''}</span>` 
-          : '';
-
+        const countBadge = allHaveAnswered ? `<span class="animator-vote-count">${voteCounts[idx] || 0} vote(s)</span>` : '';
         if (allHaveAnswered && idx === currentQ.correct) {
           li.classList.add('correct-answer');
           li.innerHTML = `<span>✓ ${opt} (Bonne réponse)</span> ${countBadge}`;
         } else {
           li.innerHTML = `<span>${opt}</span> ${countBadge}`;
         }
-
         optionsList.appendChild(li);
       });
 
       if (allHaveAnswered && !sessionData.autoSwitching && !sessionData.isPaused) {
         db.ref(`courses/${currentSessionId}`).update({ autoSwitching: true });
-        setTimeout(() => { 
+        setTimeout(() => {
           db.ref(`courses/${currentSessionId}/isPaused`).once('value', snap => {
-            if (!snap.val()) {
-              forceNextQuestion();
-            } else {
-              db.ref(`courses/${currentSessionId}`).update({ autoSwitching: false });
-            }
+            if (!snap.val()) forceNextQuestion();
+            else db.ref(`courses/${currentSessionId}`).update({ autoSwitching: false });
           });
         }, 3000);
       }
@@ -1316,59 +1239,29 @@
       const joueurs = snap.val() || {};
       Object.keys(joueurs).forEach(pKey => {
         db.ref(`courses/${currentSessionId}/joueurs/${pKey}`).update({
-          hasAnswered: false,
-          lastAnswer: null,
-          riskTaken: false,
-          turboActive: false,
-          isExploding: false
+          hasAnswered: false, lastAnswer: null, riskTaken: false, turboActive: false, sabotageTarget: null, isExploding: false, isSlipping: false
         });
       });
-
-      const newModifiers = calculateAndAssignModifiers(joueurs);
-      const actualDoubleRisk = sessionData.pendingDoubleRisk || false;
-
       db.ref(`courses/${currentSessionId}`).update({
-        status: 'active',
-        currentQuestion: 0,
-        firstCorrectPlayer: null,
-        answersCount: 0,
-        autoSwitching: false,
-        isDoubleRisk: actualDoubleRisk,
-        isPaused: false,
-        activeModifiers: newModifiers
+        status: 'active', currentQuestion: 0, firstCorrectPlayer: null, answersCount: 0, autoSwitching: false, isPaused: false, activeModifiers: calculateAndAssignModifiers(joueurs)
       });
     });
   }
 
   function forceNextQuestion() {
     const nextQ = (sessionData.currentQuestion || 0) + 1;
-
     db.ref(`courses/${currentSessionId}/joueurs`).once('value', snap => {
       const joueurs = snap.val() || {};
       Object.keys(joueurs).forEach(pKey => {
         db.ref(`courses/${currentSessionId}/joueurs/${pKey}`).update({
-          hasAnswered: false,
-          lastAnswer: null,
-          riskTaken: false,
-          turboActive: false,
-          isExploding: false
+          hasAnswered: false, lastAnswer: null, riskTaken: false, turboActive: false, sabotageTarget: null, isExploding: false, isSlipping: false
         });
       });
 
-      if (nextQ >= QUESTIONS.length) {
-        db.ref(`courses/${currentSessionId}`).update({ status: 'finished' });
-      } else {
-        const newModifiers = calculateAndAssignModifiers(joueurs);
-        const actualDoubleRisk = sessionData.pendingDoubleRisk || false;
-
+      if (nextQ >= QUESTIONS.length) db.ref(`courses/${currentSessionId}`).update({ status: 'finished' });
+      else {
         db.ref(`courses/${currentSessionId}`).update({
-          currentQuestion: nextQ,
-          firstCorrectPlayer: null,
-          answersCount: 0,
-          autoSwitching: false,
-          isDoubleRisk: actualDoubleRisk,
-          isPaused: false,
-          activeModifiers: newModifiers
+          currentQuestion: nextQ, firstCorrectPlayer: null, answersCount: 0, autoSwitching: false, isPaused: false, activeModifiers: calculateAndAssignModifiers(joueurs)
         });
       }
     });
@@ -1377,10 +1270,9 @@
   function updateRaceTrackV2(joueursObj, firstCorrectKey, activeModifiers) {
     const trackContainer = document.getElementById('race-track-v2');
     trackContainer.innerHTML = '';
-
     const entries = Object.entries(joueursObj);
     if (entries.length === 0) {
-      trackContainer.innerHTML = `<div style="color:#eee; text-align:center; margin:auto;">En attente de connexion des mascottes...</div>`;
+      trackContainer.innerHTML = `<div style="color:#eee; text-align:center; margin:auto;">En attente de connexion...</div>`;
       return;
     }
 
@@ -1391,60 +1283,29 @@
       const avatarInfo = AVATARS.find(a => a.id === jData.avatar) || AVATARS[0];
       const lane = document.createElement('div');
       lane.className = `lane-v2 lane-color-${index % 6}`;
-
       const progressPct = Math.min(Math.max((jData.position / MAX_THEORETICAL_POINTS) * 82 + 2, 2), 85);
-
       const isLeader = (jData.position > 0 && jData.position === maxCurrentScore);
       const isFastest = (firstCorrectKey === pKey);
 
-      let smokeHtml = '';
-      let rocketHtml = '';
-      if (isFastest) {
-        smokeHtml = `
-          <div class="smoke-container" style="left: calc(${progressPct}% - 10px);">
-            <div class="smoke-puff"></div>
-            <div class="smoke-puff"></div>
-            <div class="smoke-puff"></div>
-          </div>
-        `;
-        rocketHtml = `<span class="fastest-rocket" style="left: calc(${progressPct}% + 45px);">🚀</span>`;
-      }
-
+      let smokeHtml = isFastest ? `<div class="smoke-container" style="left: calc(${progressPct}% - 10px);"><div class="smoke-puff"></div><div class="smoke-puff"></div><div class="smoke-puff"></div></div>` : '';
+      let rocketHtml = isFastest ? `<span class="fastest-rocket" style="left: calc(${progressPct}% + 45px);">🚀</span>` : '';
       let modifierHtml = '';
       const pModifier = activeModifiers ? activeModifiers[pKey] : null;
-      if (pModifier === 'mushroom') {
-        modifierHtml = `<span class="modifier-badge mushroom-boost" style="left: calc(${progressPct}% - 35px);">🍄</span>`;
-      } else if (pModifier === 'banana') {
-        modifierHtml = `<span class="modifier-badge banana-trap" style="left: calc(${progressPct}% - 35px);">🍌</span>`;
-      }
+      if (pModifier === 'mushroom') modifierHtml = `<span class="modifier-badge mushroom-boost" style="left: calc(${progressPct}% - 35px);">🍄</span>`;
+      else if (pModifier === 'banana') modifierHtml = `<span class="modifier-badge banana-trap" style="left: calc(${progressPct}% - 35px);">🍌</span>`;
 
-      let riskHtml = '';
-      if (jData.riskTaken) {
-        riskHtml = `<span class="risk-badge" style="left: calc(${progressPct}% + 40px);">🎲</span>`;
-      }
-
-      let turboHtml = '';
-      if (jData.turboActive) {
-        turboHtml = `<span class="turbo-badge" style="left: calc(${progressPct}% + 40px);">⚡</span>`;
-      }
-
-      const isSlipping = jData.isSlipping ? 'slip-spin' : '';
-      const isExploding = jData.isExploding ? 'exploding' : '';
-      const isElectric = jData.turboActive ? 'electric-halo' : (isLeader ? 'leader-halo' : '');
+      let riskHtml = jData.riskTaken ? `<span class="risk-badge" style="left: calc(${progressPct}% + 40px);">🎲</span>` : '';
+      let turboHtml = jData.turboActive ? `<span class="turbo-badge" style="left: calc(${progressPct}% + 40px);">⚡</span>` : '';
 
       lane.innerHTML = `
         <span class="player-tag">${jData.name}</span>
         <span class="player-tag-center">${jData.name}</span>
-        ${modifierHtml}
-        ${riskHtml}
-        ${turboHtml}
-        ${smokeHtml}
-        <img src="${avatarInfo.img}" class="runner-avatar ${isElectric} ${isSlipping} ${isExploding}" style="left: ${progressPct}%;" onerror="this.src='https://via.placeholder.com/44?text=X'">
+        ${modifierHtml} ${riskHtml} ${turboHtml} ${smokeHtml}
+        <img src="${avatarInfo.img}" class="runner-avatar ${jData.turboActive ? 'electric-halo' : (isLeader ? 'leader-halo' : '')} ${jData.isSlipping ? 'slip-spin' : ''} ${jData.isExploding ? 'exploding' : ''}" style="left: ${progressPct}%;" onerror="this.src='https://via.placeholder.com/44?text=X'">
         ${rocketHtml}
         <span class="score-badge">${jData.position} pts</span>
         <div class="finish-line"></div>
       `;
-
       trackContainer.appendChild(lane);
     });
   }
@@ -1455,48 +1316,91 @@
     document.getElementById('btn-risk-on').className = isRisk ? "btn btn-small btn-danger" : "btn btn-small btn-secondary";
   }
 
-  function togglePlayerTurbo() {
+  // GESTION DU MENU TURBO & SABOTAGE MOBILE
+  function togglePlayerTurboMenu() {
     if (hasAnsweredCurrentQuestion) return;
-    
-    db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).once('value', snap => {
-      const pData = snap.val() || {};
-      const currentCount = pData.turboCount !== undefined ? pData.turboCount : 0;
+    const panel = document.getElementById('turbo-options-panel');
+    const targetPanel = document.getElementById('sabotage-targets-panel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    targetPanel.style.display = 'none';
+  }
 
-      if (!playerTurboActive && currentCount <= 0) {
-        alert("Vous n'avez pas de Turbo-Boost en stock !");
-        return;
-      }
+  function selectTurboMode(mode) {
+    playerTurboMode = mode;
+    document.getElementById('turbo-options-panel').style.display = 'none';
 
-      playerTurboActive = !playerTurboActive;
+    if (mode === 'boost') {
+      playerTurboActive = true;
+      playerSabotageTarget = null;
       const btn = document.getElementById('btn-turbo-boost');
+      btn.classList.add('active-turbo');
+      db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).once('value', snap => {
+        const count = (snap.val() || {}).turboCount || 0;
+        btn.innerText = `⚡ Boost ACTIVÉ (${count} en stock)`;
+      });
+    } else if (mode === 'sabotage') {
+      // Afficher la liste des cibles adverses
+      const targetsList = document.getElementById('sabotage-targets-list');
+      targetsList.innerHTML = '';
+      const joueurs = sessionData.joueurs || {};
 
-      if (playerTurboActive) {
-        btn.classList.add('active-turbo');
-        btn.innerText = `⚡ Turbo-Boost ACTIVÉ ! (${currentCount} en stock)`;
+      let hasTargets = false;
+      Object.entries(joueurs).forEach(([pKey, j]) => {
+        if (pKey !== playerId) {
+          hasTargets = true;
+          const targetBtn = document.createElement('button');
+          targetBtn.className = 'btn btn-small btn-secondary';
+          targetBtn.style.width = '100%';
+          targetBtn.style.margin = '2px 0';
+          targetBtn.innerText = `🍌 ${j.name}`;
+          targetBtn.onclick = () => confirmSabotageTarget(pKey, j.name);
+          targetsList.appendChild(targetBtn);
+        }
+      });
+
+      if (!hasTargets) {
+        alert("Aucun adversaire à saboter pour l'instant !");
       } else {
-        btn.classList.remove('active-turbo');
-        btn.innerText = `⚡ Activer Turbo-Boost (${currentCount} en stock)`;
+        document.getElementById('sabotage-targets-panel').style.display = 'block';
       }
-    });
+    }
+  }
+
+  function confirmSabotageTarget(targetKey, targetName) {
+    playerTurboActive = true;
+    playerSabotageTarget = targetKey;
+    document.getElementById('sabotage-targets-panel').style.display = 'none';
+    const btn = document.getElementById('btn-turbo-boost');
+    btn.classList.add('active-turbo');
+    btn.innerText = `🍌 Sabotage ciblé : ${targetName}`;
   }
 
   function updatePlayerUI() {
     if (sessionData.joueurs && sessionData.joueurs[playerId]) {
       const currentPlayer = sessionData.joueurs[playerId];
       const avatarInfo = AVATARS.find(a => a.id === currentPlayer.avatar) || AVATARS[0];
-      
-      const nameEl = document.getElementById('player-card-name');
+      document.getElementById('player-card-name').innerText = currentPlayer.name || '-';
       const avatarEl = document.getElementById('player-card-avatar');
-      
-      if (nameEl) nameEl.innerText = currentPlayer.name || '-';
-      if (avatarEl) {
-        avatarEl.src = avatarInfo.img;
-        avatarEl.style.display = 'block';
+      avatarEl.src = avatarInfo.img;
+      avatarEl.style.display = 'block';
+
+      const turboZone = document.getElementById('turbo-selector-zone');
+      const turboBtn = document.getElementById('btn-turbo-boost');
+      const currentCount = currentPlayer.turboCount !== undefined ? currentPlayer.turboCount : 0;
+
+      if (currentCount > 0) {
+        turboZone.style.display = 'block';
+        if (!hasAnsweredCurrentQuestion) {
+          turboBtn.disabled = false;
+          if (!playerTurboActive) turboBtn.innerText = `⚡ Activer Turbo-Boost (${currentCount} en stock)`;
+        }
+      } else {
+        if (!playerTurboActive) turboZone.style.display = 'none';
       }
     }
 
     const qIndex = sessionData.currentQuestion;
-    if (qIndex === undefined || qIndex < 0 || !QUESTIONS || QUESTIONS.length === 0 || qIndex >= QUESTIONS.length) {
+    if (qIndex === undefined || qIndex < 0 || !QUESTIONS || qIndex >= QUESTIONS.length) {
       document.getElementById('player-wait-screen').style.display = 'block';
       document.getElementById('player-question-zone').style.display = 'none';
       if (riskTimerInterval) clearInterval(riskTimerInterval);
@@ -1512,14 +1416,19 @@
     document.getElementById('q-text').innerText = q.text;
 
     const riskZone = document.getElementById('risk-selector-zone');
-    const turboZone = document.getElementById('turbo-selector-zone');
     const container = document.getElementById('answers-container');
 
     if (container.dataset.qIndex != qIndex) {
       hasAnsweredCurrentQuestion = false;
       playerRiskChoice = false;
-      playerTurboActive = false; // CORRECTION : Réinitialisation stricte de l'état local du turbo pour la nouvelle question
+      playerTurboActive = false;
+      playerSabotageTarget = null;
       setPlayerRisk(false);
+
+      const turboBtn = document.getElementById('btn-turbo-boost');
+      turboBtn.classList.remove('active-turbo');
+      document.getElementById('turbo-options-panel').style.display = 'none';
+      document.getElementById('sabotage-targets-panel').style.display = 'none';
 
       container.dataset.qIndex = qIndex;
       document.getElementById('feedback-msg').innerText = '';
@@ -1527,84 +1436,63 @@
 
       if (riskTimerInterval) clearInterval(riskTimerInterval);
 
-      // Récupération et affichage du stock réel de l'utilisateur pour la question
-      db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).once('value', snap => {
-        const pData = snap.val() || {};
-        const count = pData.turboCount !== undefined ? pData.turboCount : 0;
-        const turboBtn = document.getElementById('btn-turbo-boost');
-        
-        turboBtn.classList.remove('active-turbo');
-        turboBtn.disabled = (count <= 0);
-        turboBtn.innerText = count > 0 ? `⚡ Activer Turbo-Boost (${count} en stock)` : `⚡ Activer Turbo-Boost (0 en stock)`;
-        turboZone.style.display = (count > 0) ? 'block' : 'none';
-      });
-
       if (sessionData.isDoubleRisk) {
         riskZone.style.display = 'block';
-        
         document.getElementById('btn-risk-off').disabled = false;
         document.getElementById('btn-risk-on').disabled = false;
-        
         let timeLeft = 4;
         const riskTitleText = document.getElementById('risk-title-text');
         riskTitleText.innerHTML = `🎲 QUESTION QUITTE OU DOUBLE ! (${timeLeft}s)`;
 
         riskTimerInterval = setInterval(() => {
           timeLeft--;
-          if (timeLeft > 0) {
-            riskTitleText.innerHTML = `🎲 QUESTION QUITTE OU DOUBLE ! (${timeLeft}s)`;
-          } else {
+          if (timeLeft > 0) riskTitleText.innerHTML = `🎲 QUESTION QUITTE OU DOUBLE ! (${timeLeft}s)`;
+          else {
             clearInterval(riskTimerInterval);
-            riskTitleText.innerHTML = `🎲 QUITTE OU DOUBLE VERROUILLÉ (${playerRiskChoice ? 'Risque' : 'Sécurité'})`;
-            
+            riskTitleText.innerHTML = `🎲 QUITTE OU DOUBLE VERROUILLÉ`;
             document.getElementById('btn-risk-off').disabled = true;
             document.getElementById('btn-risk-on').disabled = true;
             riskZone.style.display = 'none';
-
-            container.innerHTML = '';
-            q.options.forEach((opt, idx) => {
-              const btn = document.createElement('button');
-              btn.className = 'btn-answer-mobile';
-              btn.innerText = opt;
-              btn.onclick = () => submitAnswer(idx, q.correct);
-              container.appendChild(btn);
-            });
+            renderAnswers(q);
           }
         }, 1000);
-
       } else {
         riskZone.style.display = 'none';
-        playerRiskChoice = false;
-
-        q.options.forEach((opt, idx) => {
-          const btn = document.createElement('button');
-          btn.className = 'btn-answer-mobile';
-          btn.innerText = opt;
-          btn.onclick = () => submitAnswer(idx, q.correct);
-          container.appendChild(btn);
-        });
+        renderAnswers(q);
       }
     }
   }
 
+  function renderAnswers(q) {
+    const container = document.getElementById('answers-container');
+    container.innerHTML = '';
+    q.options.forEach((opt, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'btn-answer-mobile';
+      btn.innerText = opt;
+      btn.onclick = () => submitAnswer(idx, q.correct);
+      container.appendChild(btn);
+    });
+  }
+
   function submitAnswer(chosenIdx, correctIdx) {
     if (hasAnsweredCurrentQuestion) return;
-
     if (!sessionData.joueurs || !sessionData.joueurs[playerId]) {
-      alert("Vous avez été retiré de la partie par l'animateur.");
+      alert("Retiré de la partie.");
       leaveSession();
       return;
     }
 
     if (riskTimerInterval) clearInterval(riskTimerInterval);
-
     hasAnsweredCurrentQuestion = true;
 
-    const buttons = document.querySelectorAll('.btn-answer-mobile');
-    buttons.forEach(b => b.disabled = true);
+    document.querySelectorAll('.btn-answer-mobile').forEach(b => b.disabled = true);
     document.getElementById('btn-turbo-boost').disabled = true;
+    document.getElementById('turbo-options-panel').style.display = 'none';
+    document.getElementById('sabotage-targets-panel').style.display = 'none';
 
     const isCorrect = (chosenIdx === correctIdx);
+    const buttons = document.querySelectorAll('.btn-answer-mobile');
     buttons[chosenIdx].classList.add(isCorrect ? 'correct' : 'wrong');
     if (!isCorrect) buttons[correctIdx].classList.add('correct');
 
@@ -1615,32 +1503,36 @@
       let currentTurboCount = pData.turboCount !== undefined ? pData.turboCount : 0;
       let newTurboCount = currentTurboCount;
 
-      if (playerTurboActive && currentTurboCount > 0) {
-        newTurboCount -= 1;
-      } else {
-        playerTurboActive = false;
-      }
+      if (playerTurboActive && currentTurboCount > 0) newTurboCount -= 1;
+      else playerTurboActive = false;
 
-      db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ 
-        hasAnswered: true,
-        lastAnswer: chosenIdx,
-        riskTaken: playerRiskChoice,
-        turboActive: playerTurboActive,
+      // Enregistrer la réponse du joueur
+      db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({
+        hasAnswered: true, lastAnswer: chosenIdx, riskTaken: playerRiskChoice,
+        turboActive: playerTurboActive && (playerTurboMode === 'boost'),
         turboCount: newTurboCount
       });
-      db.ref(`courses/${currentSessionId}/answersCount`).transaction(count => (count || 0) + 1);
+      db.ref(`courses/${currentSessionId}/answersCount`).transaction(c => (c || 0) + 1);
 
-      const activeModifiers = sessionData.activeModifiers || {};
-      const playerModifier = activeModifiers[playerId];
+      // Traitement du Sabotage si actif
+      if (playerTurboActive && playerTurboMode === 'sabotage' && playerSabotageTarget) {
+        db.ref(`courses/${currentSessionId}/joueurs/${playerSabotageTarget}`).once('value', targetSnap => {
+          const targetData = targetSnap.val();
+          if (targetData) {
+            const targetNewPos = Math.max(0, (targetData.position || 0) - 1);
+            db.ref(`courses/${currentSessionId}/joueurs/${playerSabotageTarget}`).update({
+              position: targetNewPos, isSlipping: true
+            });
+            setTimeout(() => {
+              db.ref(`courses/${currentSessionId}/joueurs/${playerSabotageTarget}`).update({ isSlipping: false });
+            }, 900);
+          }
+        });
+      }
 
+      // Calcul des points
       let deltaPoints = 0;
       let bonusText = "";
-
-      const VIB_LONG_DOUBLE = [300, 100, 300];
-      const VIB_FAST_SINGLE = 400;
-
-      let shouldTriggerFastVib = false;
-      let shouldTriggerDoubleLongVib = false;
 
       if (sessionData.isDoubleRisk && playerRiskChoice) {
         if (isCorrect) {
@@ -1648,70 +1540,45 @@
           bonusText = `💥 **QUITTE OU DOUBLE RÉUSSI ! (+3 pts)**`;
         } else {
           deltaPoints = -2;
-          bonusText = `💥 **BOOM ! ÉCHEC QUITTE OU DOUBLE ! (-2 pts)**`;
-          shouldTriggerDoubleLongVib = true;
-
+          bonusText = `💥 **BOOM ! ÉCHEC ! (-2 pts)**`;
+          triggerVibration([300, 100, 300]);
           db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isExploding: true });
-          setTimeout(() => {
-            db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isExploding: false });
-          }, 1200);
+          setTimeout(() => db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isExploding: false }), 1200);
         }
       } else {
         if (isCorrect) {
           const isFirst = !sessionData.firstCorrectPlayer;
           let basePoints = isFirst ? 2 : 1;
-
-          if (playerTurboActive) {
-            basePoints *= 2;
-          }
-
+          if (playerTurboActive && playerTurboMode === 'boost') basePoints *= 2;
           deltaPoints = basePoints;
 
           if (isFirst) {
             db.ref(`courses/${currentSessionId}/firstCorrectPlayer`).set(playerId);
-            bonusText = playerTurboActive 
-              ? `⚡🚀 **TURBO-BOOST + PREMIER ! (+${basePoints} pts)**` 
-              : `🚀 Bonne réponse ! (+2 pts le plus rapide)`;
-            shouldTriggerFastVib = true;
+            bonusText = (playerTurboActive && playerTurboMode === 'boost') ? `⚡🚀 **TURBO-BOOST + PREMIER ! (+${basePoints} pts)**` : `🚀 Bonne réponse la plus rapide ! (+2 pts)`;
+            triggerVibration(400);
           } else {
-            bonusText = playerTurboActive 
-              ? `⚡✅ **TURBO-BOOST ACTIVÉ ! (+${basePoints} pts)**` 
-              : `✅ Bonne réponse ! (+1 pt)`;
+            bonusText = (playerTurboActive && playerTurboMode === 'boost') ? `⚡✅ **TURBO-BOOST ACTIVÉ ! (+${basePoints} pts)**` : `✅ Bonne réponse ! (+1 pt)`;
           }
         } else {
           bonusText = `❌ Mauvaise réponse. (+0 pt)`;
         }
       }
 
+      const activeModifiers = sessionData.activeModifiers || {};
+      const playerModifier = activeModifiers[playerId];
       if (playerModifier === 'mushroom') {
         deltaPoints += 1;
-        bonusText += ` <br>🍄 **Bonus Champignon : +1 pt supplémentaire !**`;
-        shouldTriggerFastVib = true;
+        bonusText += ` <br>🍄 **Bonus Champignon : +1 pt !**`;
       } else if (playerModifier === 'banana') {
         deltaPoints -= 1;
-        bonusText += ` <br>🍌 **Oups ! Glissade sur une peau de banane : -1 pt !**`;
-        shouldTriggerDoubleLongVib = true;
-        
+        bonusText += ` <br>🍌 **Glissade sur une banane : -1 pt !**`;
         db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isSlipping: true });
-        setTimeout(() => {
-          db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isSlipping: false });
-        }, 900);
-      }
-
-      if (shouldTriggerDoubleLongVib) {
-        triggerVibration(VIB_LONG_DOUBLE);
-      } else if (shouldTriggerFastVib) {
-        triggerVibration(VIB_FAST_SINGLE);
+        setTimeout(() => db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ isSlipping: false }), 900);
       }
 
       feedbackEl.innerHTML = bonusText;
-
-      const currentPos = pData.position || 0;
-      const newPos = Math.max(0, currentPos + deltaPoints);
-
-      db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({
-        position: newPos
-      });
+      const newPos = Math.max(0, (pData.position || 0) + deltaPoints);
+      db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({ position: newPos });
     });
   }
 
@@ -1725,38 +1592,18 @@
 
     const maxScore = Math.max(...joueursArr.map(j => j.position));
     const winners = joueursArr.filter(j => j.position === maxScore);
-
     const bannerContainer = document.getElementById('winner-banner');
 
     if (winners.length === 1) {
       const winner = winners[0];
-      const winnerAvatar = AVATARS.find(a => a.id === winner.avatar) || {};
+      const av = AVATARS.find(a => a.id === winner.avatar) || {};
       bannerContainer.innerHTML = `
-        <img src="${winnerAvatar.img}" style="width:120px; height:120px; object-fit:contain; margin-bottom:12px; filter: drop-shadow(0 0 15px #FFD700);" onerror="this.style.display='none'">
-        <h2 style="color:var(--success); font-size:1.6rem;">🎉 Félicitations à ${winner.name} ! 🎉</h2>
-        <p style="font-size:1.1rem; margin-top:8px;">Grand Vainqueur de la course avec <strong>${winner.position} points</strong> !</p>
+        <img src="${av.img}" style="width:120px; height:120px; object-fit:contain; margin-bottom:12px; filter: drop-shadow(0 0 15px #FFD700);" onerror="this.style.display='none'">
+        <h2 style="color:var(--success); font-size:1.6rem;">🎉 ${winner.name} l'emporte ! 🎉</h2>
+        <p style="font-size:1.1rem; margin-top:8px;">Vainqueur avec <strong>${winner.position} points</strong> !</p>
       `;
     } else {
-      const winnersNames = winners.map(w => w.name).join(', ');
-
-      let avatarsHtml = '<div style="display:flex; justify-content:center; gap:15px; flex-wrap:wrap; margin-bottom:15px;">';
-      winners.forEach(w => {
-        const av = AVATARS.find(a => a.id === w.avatar) || {};
-        avatarsHtml += `
-          <div style="text-align:center;">
-            <img src="${av.img}" style="width:80px; height:80px; object-fit:contain; filter: drop-shadow(0 0 10px #FFD700);" onerror="this.style.display='none'">
-            <div style="font-size:0.85rem; font-weight:bold; margin-top:4px;">${w.name}</div>
-          </div>
-        `;
-      });
-      avatarsHtml += '</div>';
-
-      bannerContainer.innerHTML = `
-        ${avatarsHtml}
-        <h2 style="color:var(--success); font-size:1.6rem;">🤝 Égalité parfaite ! 🤝</h2>
-        <h3 style="color:var(--primary); font-size:1.2rem; margin-top:8px;">Félicitations aux vainqueurs : <strong>${winnersNames}</strong> !</h3>
-        <p style="font-size:1.1rem; margin-top:8px;">Ils terminent ex æquo en tête avec <strong>${maxScore} points</strong> chacun !</p>
-      `;
+      bannerContainer.innerHTML = `<h2 style="color:var(--success); font-size:1.6rem;">🤝 Égalité parfaite ! 🤝</h2>`;
     }
 
     if (isAnimator) {
@@ -1771,70 +1618,36 @@
   function buildPodium(joueursArr) {
     const podiumDisplay = document.getElementById('podium-display');
     podiumDisplay.innerHTML = '';
-
     const sorted = [...joueursArr].sort((a, b) => b.position - a.position);
-
     const scoreGroups = [];
     sorted.forEach(player => {
       let group = scoreGroups.find(g => g.score === player.position);
-      if (!group) {
-        group = { score: player.position, players: [] };
-        scoreGroups.push(group);
-      }
+      if (!group) { group = { score: player.position, players: [] }; scoreGroups.push(group); }
       group.players.push(player);
     });
 
     let currentRank = 1;
     const rankedGroups = [];
-
     scoreGroups.forEach(group => {
-      if (currentRank <= 3) {
-        rankedGroups.push({ rank: currentRank, score: group.score, players: group.players });
-      }
+      if (currentRank <= 3) rankedGroups.push({ rank: currentRank, score: group.score, players: group.players });
       currentRank += group.players.length;
     });
 
-    const podiumStructure = [
-      { rank: 2, icon: '🥈', label: '2e', class: 'rank-2' },
-      { rank: 1, icon: '🥇', label: '1er', class: 'rank-1' },
-      { rank: 3, icon: '🥉', label: '3e', class: 'rank-3' }
-    ];
-
-    podiumStructure.forEach(slot => {
+    [{ rank: 2, icon: '🥈', class: 'rank-2' }, { rank: 1, icon: '🥇', class: 'rank-1' }, { rank: 3, icon: '🥉', class: 'rank-3' }].forEach(slot => {
       const groupData = rankedGroups.find(g => g.rank === slot.rank);
-
       const step = document.createElement('div');
       step.className = `podium-step ${slot.class}`;
-
       if (groupData) {
         let playersHtml = '<div class="players-group">';
         groupData.players.forEach(p => {
           const av = AVATARS.find(a => a.id === p.avatar) || {};
-          playersHtml += `
-            <div class="podium-player">
-              <img src="${av.img}" alt="${p.name}" onerror="this.src='https://via.placeholder.com/55?text=X'">
-              <span class="podium-player-name">${p.name}</span>
-            </div>
-          `;
+          playersHtml += `<div class="podium-player"><img src="${av.img}" onerror="this.src='https://via.placeholder.com/55?text=X'"><span class="podium-player-name">${p.name}</span></div>`;
         });
         playersHtml += '</div>';
-
-        step.innerHTML = `
-          ${playersHtml}
-          <div class="podium-block">
-            <span class="podium-rank-num">${slot.icon}</span>
-            <span class="podium-score">${groupData.score} pts</span>
-          </div>
-        `;
+        step.innerHTML = `${playersHtml}<div class="podium-block"><span class="podium-rank-num">${slot.icon}</span><span class="podium-score">${groupData.score} pts</span></div>`;
       } else {
-        step.innerHTML = `
-          <div class="podium-block" style="opacity: 0.4;">
-            <span class="podium-rank-num">${slot.icon}</span>
-            <span class="podium-score">-</span>
-          </div>
-        `;
+        step.innerHTML = `<div class="podium-block" style="opacity: 0.4;"><span class="podium-rank-num">${slot.icon}</span><span class="podium-score">-</span></div>`;
       }
-
       podiumDisplay.appendChild(step);
     });
   }
@@ -1842,37 +1655,24 @@
   function togglePodium() {
     const panel = document.getElementById('podium-panel');
     const btn = document.getElementById('btn-show-podium');
-    if (panel.style.display === 'none') {
-      panel.style.display = 'block';
-      btn.innerText = '🥇 Masquer le Podium';
-    } else {
-      panel.style.display = 'none';
-      btn.innerText = '🥇 Afficher le Podium';
-    }
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    btn.innerText = panel.style.display === 'none' ? '🥇 Afficher le Podium' : '🥇 Masquer le Podium';
   }
 
   function buildLeaderboard(joueursArr) {
     const sorted = [...joueursArr].sort((a, b) => b.position - a.position);
     const listContainer = document.getElementById('leaderboard-list');
     listContainer.innerHTML = '';
-
     sorted.forEach((player, idx) => {
-      const avatarInfo = AVATARS.find(a => a.id === player.avatar) || {};
+      const av = AVATARS.find(a => a.id === player.avatar) || {};
       const rank = idx + 1;
-      let badgeRank = `#${rank}`;
-      let topClass = '';
-
-      if (rank === 1) { badgeRank = '🥇 1er'; topClass = 'top-1'; }
-      else if (rank === 2) { badgeRank = '🥈 2e'; topClass = 'top-2'; }
-      else if (rank === 3) { badgeRank = '🥉 3e'; topClass = 'top-3'; }
-
       const item = document.createElement('div');
-      item.className = `leaderboard-item ${topClass}`;
+      item.className = `leaderboard-item ${rank === 1 ? 'top-1' : rank === 2 ? 'top-2' : rank === 3 ? 'top-3' : ''}`;
       item.innerHTML = `
         <div style="display:flex; align-items:center; gap:12px;">
-          <span style="font-size:1.1rem; width:50px;">${badgeRank}</span>
-          <img src="${avatarInfo.img}" style="width:36px; height:36px; object-fit:contain;" onerror="this.style.display='none'">
-          <span style="font-size:1rem; color:var(--dark);">${player.name}</span>
+          <span style="font-size:1.1rem; width:50px;">${rank === 1 ? '🥇 1er' : rank === 2 ? '🥈 2e' : rank === 3 ? '🥉 3e' : '#' + rank}</span>
+          <img src="${av.img}" style="width:36px; height:36px; object-fit:contain;" onerror="this.style.display='none'">
+          <span>${player.name}</span>
         </div>
         <span style="color:var(--primary); font-size:1.05rem;">${player.position} pts</span>
       `;
@@ -1883,65 +1683,44 @@
   function toggleLeaderboard() {
     const panel = document.getElementById('leaderboard-panel');
     const btn = document.getElementById('btn-show-leaderboard');
-    if (panel.style.display === 'none') {
-      panel.style.display = 'block';
-      btn.innerText = '📊 Masquer le Classement';
-    } else {
-      panel.style.display = 'none';
-      btn.innerText = '📊 Afficher le Classement';
-    }
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    btn.innerText = panel.style.display === 'none' ? '📊 Afficher le Classement' : '📊 Masquer le Classement';
   }
 
   function toggleReview() {
     const panel = document.getElementById('review-panel');
     const btn = document.getElementById('btn-show-review');
-    if (panel.style.display === 'none') {
-      panel.style.display = 'block';
-      btn.innerText = '🔍 Masquer la révision';
-      reviewQuestionIndex = 0;
-      renderReviewQuestion();
-    } else {
-      panel.style.display = 'none';
-      btn.innerText = '🔍 Revoir toutes les questions';
-    }
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    btn.innerText = panel.style.display === 'none' ? '🔍 Revoir toutes les questions' : '🔍 Masquer la révision';
+    if (panel.style.display === 'block') { reviewQuestionIndex = 0; renderReviewQuestion(); }
   }
 
   function renderReviewQuestion() {
     if (!QUESTIONS || QUESTIONS.length === 0) return;
-
     const q = QUESTIONS[reviewQuestionIndex];
     document.getElementById('review-q-count').innerText = `Question ${reviewQuestionIndex + 1} / ${QUESTIONS.length}`;
     document.getElementById('review-q-title').innerText = q.text;
-
     const list = document.getElementById('review-options-list');
     list.innerHTML = '';
-
     q.options.forEach((opt, idx) => {
       const li = document.createElement('li');
-      li.className = 'animator-option-item';
-      if (idx === q.correct) {
-        li.classList.add('correct-answer');
-        li.innerText = `✓ ${opt} (Bonne réponse)`;
-      } else {
-        li.innerText = opt;
-      }
+      li.className = `animator-option-item ${idx === q.correct ? 'correct-answer' : ''}`;
+      li.innerText = `${idx === q.correct ? '✓ ' : ''}${opt}`;
       list.appendChild(li);
     });
-
     document.getElementById('btn-review-prev').disabled = (reviewQuestionIndex === 0);
     document.getElementById('btn-review-next').disabled = (reviewQuestionIndex === QUESTIONS.length - 1);
   }
 
   function changeReviewQuestion(delta) {
-    const newIdx = reviewQuestionIndex + delta;
-    if (newIdx >= 0 && newIdx < QUESTIONS.length) {
-      reviewQuestionIndex = newIdx;
+    if (reviewQuestionIndex + delta >= 0 && reviewQuestionIndex + delta < QUESTIONS.length) {
+      reviewQuestionIndex += delta;
       renderReviewQuestion();
     }
   }
 
   function launchConfetti() {
-    const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9800'];
+    const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#ff9800', '#4caf50'];
     for (let i = 0; i < 80; i++) {
       const confetti = document.createElement('div');
       confetti.className = 'confetti';
@@ -1950,33 +1729,18 @@
       confetti.style.animationDuration = (Math.random() * 2 + 2) + 's';
       confetti.style.animationDelay = (Math.random() * 2) + 's';
       document.body.appendChild(confetti);
-
-      setTimeout(() => { confetti.remove(); }, 5000);
+      setTimeout(() => confetti.remove(), 5000);
     }
   }
 
   function checkAutoReconnect() {
     const savedCode = localStorage.getItem('race_sessionCode');
     if (!savedCode) return;
-
     db.ref(`courses/${savedCode}`).once('value').then(snapshot => {
       const session = snapshot.val();
       if (session && session.status !== 'finished' && session.joueurs && session.joueurs[playerId]) {
-        const myPlayerData = session.joueurs[playerId];
         currentSessionId = savedCode;
-        selectedAvatarId = myPlayerData.avatar;
-
-        const avatarInfo = AVATARS.find(a => a.id === myPlayerData.avatar) || AVATARS[0];
-        
-        const nameEl = document.getElementById('player-card-name');
-        const avatarEl = document.getElementById('player-card-avatar');
-        
-        if (nameEl) nameEl.innerText = myPlayerData.name || '-';
-        if (avatarEl) {
-          avatarEl.src = avatarInfo.img;
-          avatarEl.style.display = 'block';
-        }
-
+        selectedAvatarId = session.joueurs[playerId].avatar;
         listenToCourse();
         showScreen('screen-player');
       } else {
@@ -1986,7 +1750,6 @@
   }
 
   window.addEventListener('DOMContentLoaded', checkAutoReconnect);
-
 </script>
 
 </body>
