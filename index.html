@@ -471,7 +471,6 @@
       transition: all 0.3s ease;
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
-    /* BADGES DE STATUT ANIMATEUR */
     .player-badge.status-waiting {
       background: #fff3cd;
       color: #856404;
@@ -1219,17 +1218,16 @@
     btnPause.className = sessionData.isPaused ? "btn btn-warning btn-small" : "btn btn-info btn-small";
     btnPause.innerText = sessionData.isPaused ? "▶ Reprendre" : "⏸️ Pause";
 
-    // AFFICHAGE TRICOLORE DES JOUEURS DANS LA CONSOLE ANIMATEUR
     listEl.innerHTML = entries.map(([pKey, j]) => {
       let badgeClass = "status-waiting";
       let icon = "⌛";
 
       if (j.hasAnswered) {
         if (j.isCorrect === true) {
-          badgeClass = "status-correct"; // Vert clair
+          badgeClass = "status-correct";
           icon = "✓";
         } else if (j.isCorrect === false) {
-          badgeClass = "status-wrong";   // Rouge clair
+          badgeClass = "status-wrong";
           icon = "✕";
         }
       }
@@ -1492,15 +1490,20 @@
         attackMsgEl.style.display = 'none';
       }
 
+      // MODIFICATION : Masquer le turbo si Quitte ou Double ET stock à 0
       if (sessionData.isDoubleRisk) {
-        turboZone.style.display = 'block';
-        turboBtn.disabled = true;
-        playerTurboActive = false;
-        playerSabotageTarget = null;
-        turboBtn.classList.remove('active-turbo');
-        document.getElementById('turbo-options-panel').style.display = 'none';
-        document.getElementById('sabotage-targets-panel').style.display = 'none';
-        turboBtn.innerText = `⚡ Turbo non disponible en Quitte ou Double (${currentCount} en stock)`;
+        if (currentCount > 0) {
+          turboZone.style.display = 'block';
+          turboBtn.disabled = true;
+          playerTurboActive = false;
+          playerSabotageTarget = null;
+          turboBtn.classList.remove('active-turbo');
+          document.getElementById('turbo-options-panel').style.display = 'none';
+          document.getElementById('sabotage-targets-panel').style.display = 'none';
+          turboBtn.innerText = `⚡ Turbo non dispo en Quitte ou Double (${currentCount} en stock)`;
+        } else {
+          turboZone.style.display = 'none';
+        }
       } else if (currentCount > 0) {
         turboZone.style.display = 'block';
         if (!hasAnsweredCurrentQuestion) {
@@ -1683,7 +1686,6 @@
 
       const newPos = Math.max(0, (pData.position || 0) + deltaPoints);
 
-      // ENREGISTREMENT DE HASSANSWERED ET ISCORRECT POUR LA CONSOLE ANIMATEUR
       db.ref(`courses/${currentSessionId}/joueurs/${playerId}`).update({
         hasAnswered: true,
         isCorrect: isCorrect,
